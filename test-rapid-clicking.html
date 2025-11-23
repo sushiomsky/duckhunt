@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Duck Hunt Rapid Clicking Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .chat-container {
+            width: 400px;
+            height: 600px;
+            background: #2a2a2a;
+            border: 2px solid #444;
+            border-radius: 10px;
+            padding: 10px;
+            position: relative;
+            overflow: hidden;
+            float: left;
+            margin-right: 20px;
+        }
+
+        .chat-message {
+            background: #3a3a3a;
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 5px;
+            cursor: default;
+            display: flex;
+            align-items: center;
+        }
+
+        .avatar {
+            width: 30px;
+            height: 30px;
+            background: #5a5a5a;
+            border-radius: 50%;
+            margin-right: 10px;
+            display: inline-block;
+        }
+
+        .heart {
+            color: red;
+            cursor: pointer;
+            margin-left: 5px;
+            font-size: 16px;
+        }
+
+        .duck {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            cursor: pointer;
+            z-index: 1000;
+            font-size: 40px;
+            transition: all 0.1s ease;
+        }
+
+        .duck.hit {
+            transform: rotate(90deg) scale(0.5);
+            opacity: 0.5;
+        }
+
+        .stats {
+            width: 350px;
+            background: #2a2a2a;
+            border: 2px solid #444;
+            border-radius: 10px;
+            padding: 15px;
+            float: left;
+        }
+
+        .stat-item {
+            margin: 10px 0;
+            padding: 5px;
+            background: #3a3a3a;
+            border-radius: 3px;
+        }
+
+        .controls {
+            clear: both;
+            padding-top: 20px;
+            margin-top: 20px;
+            border-top: 1px solid #444;
+        }
+
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background: #45a049;
+        }
+
+        .log {
+            clear: both;
+            margin-top: 20px;
+            background: #2a2a2a;
+            border: 2px solid #444;
+            border-radius: 10px;
+            padding: 10px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .log-entry {
+            padding: 2px 0;
+            border-bottom: 1px solid #333;
+        }
+
+        .success {
+            color: #4CAF50;
+        }
+
+        .warning {
+            color: #ff9800;
+        }
+
+        .error {
+            color: #f44336;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🦆 Duck Hunt Rapid Clicking Test</h1>
+        <p>This page simulates a chat environment to test the rapid clicking approach.</p>
+
+        <div class="chat-container" id="chatContainer">
+            <div class="chat-message">
+                <span class="avatar"></span>
+                <span>User1: Hello everyone! 💬</span>
+                <span class="heart" onclick="alert('Heart clicked!')">❤️</span>
+            </div>
+            <div class="chat-message">
+                <span class="avatar"></span>
+                <span>User2: Good luck hunting!</span>
+                <span class="heart" onclick="alert('Heart clicked!')">❤️</span>
+            </div>
+            <div class="chat-message">
+                <span class="avatar"></span>
+                <span>User3: Anyone seen ducks?</span>
+                <span class="heart" onclick="alert('Heart clicked!')">❤️</span>
+            </div>
+        </div>
+
+        <div class="stats">
+            <h3>Statistics</h3>
+            <div class="stat-item">
+                <strong>Ducks Spawned:</strong> <span id="ducksSpawned">0</span>
+            </div>
+            <div class="stat-item">
+                <strong>Ducks Hit:</strong> <span id="ducksHit">0</span>
+            </div>
+            <div class="stat-item">
+                <strong>Ducks Missed:</strong> <span id="ducksMissed">0</span>
+            </div>
+            <div class="stat-item">
+                <strong>Hit Rate:</strong> <span id="hitRate">0%</span>
+            </div>
+            <div class="stat-item">
+                <strong>Chat Elements Clicked:</strong> <span id="chatElementsClicked">0</span>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button onclick="spawnDuck()">Spawn Duck</button>
+            <button onclick="spawnMultipleDucks(5)">Spawn 5 Ducks</button>
+            <button onclick="clearLog()">Clear Log</button>
+            <button onclick="resetStats()">Reset Stats</button>
+        </div>
+
+        <div class="log" id="logContainer">
+            <div class="log-entry">Test log initialized...</div>
+        </div>
+    </div>
+
+    <script>
+        let stats = {
+            ducksSpawned: 0,
+            ducksHit: 0,
+            ducksMissed: 0,
+            chatElementsClicked: 0
+        };
+
+        function updateStats() {
+            document.getElementById('ducksSpawned').textContent = stats.ducksSpawned;
+            document.getElementById('ducksHit').textContent = stats.ducksHit;
+            document.getElementById('ducksMissed').textContent = stats.ducksMissed;
+            
+            const hitRate = stats.ducksSpawned > 0 
+                ? ((stats.ducksHit / stats.ducksSpawned) * 100).toFixed(1)
+                : 0;
+            document.getElementById('hitRate').textContent = hitRate + '%';
+            
+            document.getElementById('chatElementsClicked').textContent = stats.chatElementsClicked;
+        }
+
+        function log(message, type = 'normal') {
+            const logContainer = document.getElementById('logContainer');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry ' + type;
+            entry.textContent = new Date().toLocaleTimeString() + ' - ' + message;
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('logContainer').innerHTML = '<div class="log-entry">Log cleared...</div>';
+        }
+
+        function resetStats() {
+            stats = {
+                ducksSpawned: 0,
+                ducksHit: 0,
+                ducksMissed: 0,
+                chatElementsClicked: 0
+            };
+            updateStats();
+            log('Statistics reset', 'warning');
+        }
+
+        // Track clicks on chat elements
+        document.querySelectorAll('.chat-message, .avatar, .heart').forEach(el => {
+            el.addEventListener('click', function(e) {
+                stats.chatElementsClicked++;
+                updateStats();
+                log('WARNING: Chat element clicked! (' + e.target.tagName + ')', 'error');
+            });
+        });
+
+        function spawnDuck() {
+            stats.ducksSpawned++;
+            updateStats();
+
+            const chatContainer = document.getElementById('chatContainer');
+            const duck = document.createElement('div');
+            duck.className = 'duck';
+            duck.textContent = '🦆';
+            duck.dataset.duckId = stats.ducksSpawned;
+
+            // Random position in chat
+            const chatRect = chatContainer.getBoundingClientRect();
+            const x = Math.random() * (chatContainer.clientWidth - 50);
+            const y = Math.random() * (chatContainer.clientHeight - 50);
+
+            duck.style.left = x + 'px';
+            duck.style.top = y + 'px';
+
+            let hit = false;
+
+            // Duck click handler
+            duck.addEventListener('click', function() {
+                if (!hit) {
+                    hit = true;
+                    stats.ducksHit++;
+                    updateStats();
+                    this.classList.add('hit');
+                    log('Duck #' + this.dataset.duckId + ' HIT! 🎯', 'success');
+                    setTimeout(() => this.remove(), 500);
+                }
+            });
+
+            chatContainer.appendChild(duck);
+            log('Duck #' + stats.ducksSpawned + ' spawned at (' + x.toFixed(0) + ', ' + y.toFixed(0) + ')');
+
+            // Animate duck
+            let xSpeed = (Math.random() - 0.5) * 3;
+            let ySpeed = (Math.random() - 0.5) * 3;
+            
+            const animate = setInterval(() => {
+                if (!chatContainer.contains(duck) || hit) {
+                    clearInterval(animate);
+                    return;
+                }
+
+                let currentX = parseFloat(duck.style.left);
+                let currentY = parseFloat(duck.style.top);
+
+                currentX += xSpeed;
+                currentY += ySpeed;
+
+                // Bounce off edges
+                if (currentX <= 0 || currentX >= chatContainer.clientWidth - 50) {
+                    xSpeed *= -1;
+                }
+                if (currentY <= 0 || currentY >= chatContainer.clientHeight - 50) {
+                    ySpeed *= -1;
+                }
+
+                duck.style.left = currentX + 'px';
+                duck.style.top = currentY + 'px';
+            }, 50);
+
+            // Remove after 8 seconds if not hit
+            setTimeout(() => {
+                if (chatContainer.contains(duck) && !hit) {
+                    stats.ducksMissed++;
+                    updateStats();
+                    duck.remove();
+                    log('Duck #' + duck.dataset.duckId + ' escaped!', 'warning');
+                }
+                clearInterval(animate);
+            }, 8000);
+        }
+
+        function spawnMultipleDucks(count) {
+            for (let i = 0; i < count; i++) {
+                setTimeout(() => spawnDuck(), i * 500);
+            }
+        }
+
+        // Instructions
+        log('=== Instructions ===');
+        log('1. Load the Duck Hunt Chrome extension');
+        log('2. Click "Spawn Duck" to create test ducks');
+        log('3. Watch the extension click rapidly in the chat area');
+        log('4. Verify that chat elements (messages, avatars, hearts) are NOT clicked');
+        log('5. Verify that ducks ARE being hit');
+        log('==================');
+
+        console.log('Duck Hunt Rapid Clicking Test loaded');
+        console.log('Open browser console to see extension activity');
+    </script>
+</body>
+</html>

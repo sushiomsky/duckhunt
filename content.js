@@ -102,7 +102,7 @@
       // Avoid elements with text content (to avoid clicking on messages)
       const textContent = element.textContent?.trim() || '';
       if (textContent.length > 0 && element.children.length === 0) {
-        // This is a text node
+        // This is a text node (leaf element with text)
         return true;
       }
 
