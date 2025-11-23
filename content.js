@@ -55,8 +55,8 @@
     // CRITICAL FIX: Add scroll position to get absolute coordinates
     // Previously this might have been using only viewport-relative coordinates
     // which would cause ducks to appear at wrong positions as page scrolls
-    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-    const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+    const scrollTop = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
+    const scrollLeft = window.scrollX || window.pageXOffset || document.documentElement.scrollLeft;
     
     return {
       top: rect.top + scrollTop,
@@ -132,11 +132,19 @@
 
   // Also observe DOM changes for dynamically added ducks
   const observer = new MutationObserver((mutations) => {
-    // Check for new ducks when DOM changes
-    checkForDucks();
+    // Check for new ducks when relevant DOM changes occur
+    // Filter to only check when nodes are added or attributes change
+    const relevantChange = mutations.some(mutation => 
+      mutation.type === 'childList' && mutation.addedNodes.length > 0 ||
+      mutation.type === 'attributes'
+    );
+    
+    if (relevantChange) {
+      checkForDucks();
+    }
   });
 
-  // Start observing
+  // Start observing - observe body but filter mutations to reduce overhead
   observer.observe(document.body, {
     childList: true,
     subtree: true,
