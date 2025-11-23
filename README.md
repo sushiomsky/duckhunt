@@ -1,13 +1,13 @@
 # DuckDice Duck Hunt Auto-Shooter
 
-A Chrome extension that automatically detects and shoots ducks in the DuckDice Duck Hunt bonus game.
+A Chrome extension that automatically shoots ducks in the DuckDice Duck Hunt bonus game by rapidly clicking on empty spaces in the chat area.
 
 ## Features
 
-- Automatically detects ducks appearing on duckdice.io
-- Auto-clicks ducks for instant rewards
-- Fixed positioning issue where ducks would fly at the bottom of the page after scrolling
-- Lightweight and efficient detection using MutationObserver
+- Rapidly clicks empty spaces in the chat area to hit flying ducks
+- Intelligently avoids clicking on text, avatars, hearts, and other UI elements
+- High-speed clicking (20 clicks per cycle, every 50ms)
+- Automatically detects and adapts to the chat container
 - Works with dynamic content loading
 
 ## Installation
@@ -23,26 +23,20 @@ A Chrome extension that automatically detects and shoots ducks in the DuckDice D
 
 ## How It Works
 
-The extension injects a content script into duckdice.io pages that:
+The extension uses a rapid-clicking approach to catch flying ducks:
 
-1. Continuously scans for duck elements using multiple selectors
-2. Calculates the absolute position of ducks accounting for page scroll
-3. Automatically clicks on detected ducks
-4. Uses MutationObserver to catch dynamically added ducks
+1. **Locates the chat area** - Finds the chat container on duckdice.io using multiple detection strategies
+2. **Generates random click points** - Creates 20 random coordinates within the chat area
+3. **Filters safe click zones** - Avoids clicking on:
+   - Text content and messages
+   - Avatars and images
+   - Hearts and reaction icons
+   - Links and buttons
+   - Other clickable UI elements
+4. **Rapid clicking** - Clicks on safe empty spaces every 50ms
+5. **Hits the duck** - Eventually hits the flying duck as it moves through the click zone
 
-## Bug Fix
-
-### Issue: Ducks Flying at Bottom of Page
-
-**Problem:** After scrolling the page, ducks would appear to fly at the bottom of the viewport instead of their correct positions.
-
-**Root Cause:** The click coordinate calculation was using viewport-relative coordinates without accounting for scroll position.
-
-**Solution:** The `getAbsolutePosition()` function now properly calculates both:
-- Absolute coordinates (including scroll offset) for accurate positioning
-- Viewport-relative coordinates for click events
-
-This ensures ducks are detected and clicked correctly regardless of page scroll position.
+This approach is more reliable than trying to detect the duck element directly, as it doesn't depend on specific HTML structure or class names.
 
 ## Usage
 
@@ -55,8 +49,9 @@ This ensures ducks are detected and clicked correctly regardless of page scroll 
 
 - **Manifest Version:** 3
 - **Permissions:** activeTab, duckdice.io host permissions
-- **Detection Interval:** 100ms
-- **Click Delay:** 50ms (to simulate human behavior)
+- **Click Interval:** 50ms (very fast clicking)
+- **Points per Cycle:** 20 random points
+- **Avoidance:** Smart filtering to prevent clicking on UI elements
 
 ## Notes
 

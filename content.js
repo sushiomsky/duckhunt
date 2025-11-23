@@ -1,5 +1,5 @@
 // DuckDice Duck Hunt Auto-Shooter
-// Automatically clicks ducks that appear in the chat area
+// Rapidly clicks empty spaces in the chat area to hit flying ducks
 
 (function() {
   'use strict';
@@ -8,150 +8,159 @@
 
   // Configuration
   const CONFIG = {
-    CHECK_INTERVAL: 100,        // Check every 100ms
-    CLICK_COOLDOWN: 300,        // Minimum 300ms between clicks
-    DEBUG_MODE: true            // Enable detailed logging
+    CLICK_INTERVAL: 50,          // Click every 50ms (very fast)
+    POINTS_PER_CYCLE: 20,        // Generate 20 random points per cycle
+    MIN_AREA_SIZE: 100,          // Minimum chat area size to start clicking
+    DEBUG_MODE: true,            // Enable detailed logging
+    CHAT_SELECTORS: [            // Possible selectors for the chat container
+      '[class*="chat"]',
+      '[id*="chat"]',
+      '[class*="Chat"]',
+      '[id*="Chat"]',
+      '[class*="message"]',
+      '[class*="Message"]'
+    ]
   };
 
   // State management
   const state = {
-    clickedElements: new WeakSet(),
-    lastClickTime: 0,
     totalClicks: 0,
-    detectionLog: []
+    chatContainer: null,
+    isActive: false
   };
 
-  // Utility: Safe element check
-  function isValidElement(el) {
-    try {
-      // Must not be a link
-      if (el.tagName === 'A' || el.closest('a')) {
-        return false;
+  // Find the chat container on the page
+  function findChatContainer() {
+    // Try each selector
+    for (const selector of CONFIG.CHAT_SELECTORS) {
+      const elements = document.querySelectorAll(selector);
+      for (const el of elements) {
+        const rect = el.getBoundingClientRect();
+        // Must be reasonably sized and visible
+        if (rect.width >= CONFIG.MIN_AREA_SIZE && 
+            rect.height >= CONFIG.MIN_AREA_SIZE &&
+            rect.width > 0 && rect.height > 0) {
+          const style = window.getComputedStyle(el);
+          if (style.display !== 'none' && style.visibility !== 'hidden') {
+            return el;
+          }
+        }
       }
-
-      // Must have valid bounding box
-      const rect = el.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) {
-        return false;
-      }
-
-      // Must be visible
-      const style = window.getComputedStyle(el);
-      if (style.display === 'none' || 
-          style.visibility === 'hidden' || 
-          parseFloat(style.opacity) < 0.1) {
-        return false;
-      }
-
-      return true;
-    } catch (e) {
-      return false;
     }
-  }
-
-  // Find all potential duck elements
-  function findPotentialDucks() {
-    const candidates = [];
     
-    // Strategy 1: Find images with duck-related attributes
-    document.querySelectorAll('img').forEach(img => {
-      if (img.src && img.src.toLowerCase().includes('duck')) {
-        candidates.push({ element: img, type: 'img-src-duck', priority: 10 });
+    // Fallback: find the largest visible container that might be chat
+    const allDivs = document.querySelectorAll('div');
+    let largestChat = null;
+    let largestArea = 0;
+    
+    for (const div of allDivs) {
+      const rect = div.getBoundingClientRect();
+      const area = rect.width * rect.height;
+      if (area > largestArea && area > CONFIG.MIN_AREA_SIZE * CONFIG.MIN_AREA_SIZE) {
+        const style = window.getComputedStyle(div);
+        if (style.display !== 'none' && style.visibility !== 'hidden') {
+          // Check if it looks like a chat (has overflow scroll/auto)
+          if (style.overflow === 'auto' || style.overflow === 'scroll' ||
+              style.overflowY === 'auto' || style.overflowY === 'scroll') {
+            largestChat = div;
+            largestArea = area;
+          }
+        }
       }
-      if (img.alt && img.alt.toLowerCase().includes('duck')) {
-        candidates.push({ element: img, type: 'img-alt-duck', priority: 9 });
-      }
-    });
-
-    // Strategy 2: Find elements with duck-related classes or IDs
-    ['duck', 'Duck', 'DUCK'].forEach(keyword => {
-      document.querySelectorAll(`[class*="${keyword}"]:not(a)`).forEach(el => {
-        candidates.push({ element: el, type: 'class-duck', priority: 8 });
-      });
-      document.querySelectorAll(`[id*="${keyword}"]:not(a)`).forEach(el => {
-        candidates.push({ element: el, type: 'id-duck', priority: 8 });
-      });
-    });
-
-    // Strategy 3: Find canvas elements (games often use canvas)
-    document.querySelectorAll('canvas').forEach(canvas => {
-      const style = window.getComputedStyle(canvas);
-      // Look for positioned canvas elements (likely game elements)
-      if (style.position === 'absolute' || style.position === 'fixed') {
-        candidates.push({ element: canvas, type: 'canvas-positioned', priority: 7 });
-      }
-    });
-
-    // Strategy 4: Find SVG elements with duck-like properties
-    document.querySelectorAll('svg, svg *').forEach(svg => {
-      const classes = svg.className.baseVal || svg.className || '';
-      if (typeof classes === 'string' && classes.toLowerCase().includes('duck')) {
-        candidates.push({ element: svg, type: 'svg-duck', priority: 9 });
-      }
-    });
-
-    // Strategy 5: Find elements with data attributes
-    document.querySelectorAll('[data-duck], [data-target], [data-clickable]').forEach(el => {
-      candidates.push({ element: el, type: 'data-attribute', priority: 9 });
-    });
-
-    // Strategy 6: Look for clickable game elements (positioned divs/spans with cursor pointer)
-    document.querySelectorAll('div, span').forEach(el => {
-      const style = window.getComputedStyle(el);
-      if ((style.position === 'absolute' || style.position === 'fixed') &&
-          style.cursor === 'pointer' &&
-          !el.querySelector('a')) {  // Don't contain links
-        candidates.push({ element: el, type: 'positioned-clickable', priority: 6 });
-      }
-    });
-
-    // Filter and validate
-    const validCandidates = candidates.filter(c => {
-      if (state.clickedElements.has(c.element)) {
-        return false;
-      }
-      return isValidElement(c.element);
-    });
-
-    // Sort by priority (higher priority first)
-    validCandidates.sort((a, b) => b.priority - a.priority);
-
-    if (CONFIG.DEBUG_MODE && validCandidates.length > 0) {
-      console.log(`[Duck Hunt] 🎯 Found ${validCandidates.length} potential targets:`, 
-        validCandidates.map(c => `${c.type} (priority ${c.priority})`));
     }
-
-    return validCandidates;
+    
+    return largestChat;
   }
 
-  // Click on a duck element
-  function shootDuck(candidate) {
-    const { element, type } = candidate;
-    const now = Date.now();
-
-    // Enforce click cooldown
-    if (now - state.lastClickTime < CONFIG.CLICK_COOLDOWN) {
-      if (CONFIG.DEBUG_MODE) {
-        console.log('[Duck Hunt] ⏳ Click cooldown active, waiting...');
-      }
-      return false;
-    }
+  // Check if an element at a point should be avoided
+  function shouldAvoidElement(element) {
+    if (!element) return true;
 
     try {
-      // Mark as clicked
-      state.clickedElements.add(element);
-      state.lastClickTime = now;
+      const tagName = element.tagName.toLowerCase();
+      
+      // Avoid links
+      if (tagName === 'a' || element.closest('a')) {
+        return true;
+      }
+
+      // Avoid buttons
+      if (tagName === 'button' || element.closest('button')) {
+        return true;
+      }
+
+      // Avoid input elements
+      if (tagName === 'input' || tagName === 'textarea' || tagName === 'select') {
+        return true;
+      }
+
+      // Avoid images (avatars, hearts, etc.)
+      if (tagName === 'img' || tagName === 'svg') {
+        return true;
+      }
+
+      // Avoid elements with text content (to avoid clicking on messages)
+      const textContent = element.textContent?.trim() || '';
+      if (textContent.length > 0 && element.children.length === 0) {
+        // This is a text node
+        return true;
+      }
+
+      // Avoid clickable elements (cursor pointer)
+      const style = window.getComputedStyle(element);
+      if (style.cursor === 'pointer' || style.cursor === 'grab') {
+        // Unless it's absolutely positioned (could be the duck)
+        if (style.position !== 'absolute' && style.position !== 'fixed') {
+          return true;
+        }
+      }
+
+      // Avoid elements with onclick handlers
+      if (element.onclick || element.hasAttribute('onclick')) {
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      return true;
+    }
+  }
+
+  // Generate random points within the chat area
+  function generateClickPoints(chatRect) {
+    const points = [];
+    const padding = 10; // Stay away from edges
+    
+    for (let i = 0; i < CONFIG.POINTS_PER_CYCLE; i++) {
+      const x = chatRect.left + padding + Math.random() * (chatRect.width - 2 * padding);
+      const y = chatRect.top + padding + Math.random() * (chatRect.height - 2 * padding);
+      points.push({ x, y });
+    }
+    
+    return points;
+  }
+
+  // Click at a specific point
+  function clickAt(x, y) {
+    try {
+      // Check what's at this point
+      const element = document.elementFromPoint(x, y);
+      
+      // Skip if we should avoid this element
+      if (shouldAvoidElement(element)) {
+        if (CONFIG.DEBUG_MODE && state.totalClicks % 100 === 0) {
+          console.log(`[Duck Hunt] ⏭️  Skipping click at (${x.toFixed(0)}, ${y.toFixed(0)}) - avoiding ${element?.tagName || 'unknown'}`);
+        }
+        return false;
+      }
+
       state.totalClicks++;
 
-      const rect = element.getBoundingClientRect();
-      const x = rect.left + rect.width / 2;
-      const y = rect.top + rect.height / 2;
+      if (CONFIG.DEBUG_MODE && state.totalClicks % 100 === 0) {
+        console.log(`[Duck Hunt] 💥 Click #${state.totalClicks} at (${x.toFixed(0)}, ${y.toFixed(0)}) on ${element?.tagName || 'unknown'}`);
+      }
 
-      console.log(`[Duck Hunt] 💥 SHOOTING! Click #${state.totalClicks}`);
-      console.log(`[Duck Hunt] 📍 Type: ${type}, Tag: ${element.tagName}, Position: (${x.toFixed(0)}, ${y.toFixed(0)})`);
-      console.log(`[Duck Hunt] 🏷️  Classes: "${element.className}", ID: "${element.id}"`);
-
-      // Create comprehensive mouse events
+      // Create mouse events
       const eventOptions = {
         view: window,
         bubbles: true,
@@ -161,57 +170,81 @@
         button: 0
       };
 
-      // Dispatch full click sequence
-      element.dispatchEvent(new MouseEvent('mouseenter', eventOptions));
-      element.dispatchEvent(new MouseEvent('mouseover', eventOptions));
-      element.dispatchEvent(new MouseEvent('mousedown', eventOptions));
-      element.dispatchEvent(new MouseEvent('mouseup', eventOptions));
-      element.dispatchEvent(new MouseEvent('click', eventOptions));
-
-      // Also try direct click
-      if (typeof element.click === 'function') {
-        element.click();
+      // Dispatch click events at the point
+      if (element) {
+        element.dispatchEvent(new MouseEvent('mousedown', eventOptions));
+        element.dispatchEvent(new MouseEvent('mouseup', eventOptions));
+        element.dispatchEvent(new MouseEvent('click', eventOptions));
       }
 
-      // Try clicking on the point in the document
-      const elementAtPoint = document.elementFromPoint(x, y);
-      if (elementAtPoint && elementAtPoint !== element) {
-        console.log('[Duck Hunt] 🎯 Also clicking element at point:', elementAtPoint.tagName);
-        elementAtPoint.dispatchEvent(new MouseEvent('click', eventOptions));
-      }
+      // Also dispatch at document level
+      document.elementFromPoint(x, y)?.dispatchEvent(new MouseEvent('click', eventOptions));
 
-      console.log('[Duck Hunt] ✅ Shot fired successfully!');
       return true;
-
     } catch (error) {
-      console.error('[Duck Hunt] ❌ Error shooting duck:', error);
+      if (CONFIG.DEBUG_MODE) {
+        console.error('[Duck Hunt] ❌ Error clicking at point:', error);
+      }
       return false;
     }
   }
 
-  // Main detection and shooting function
-  function scanAndShoot() {
-    const targets = findPotentialDucks();
+  // Main rapid clicking function
+  function rapidClickCycle() {
+    if (!state.isActive) return;
+
+    // Find or verify chat container
+    if (!state.chatContainer || !document.body.contains(state.chatContainer)) {
+      state.chatContainer = findChatContainer();
+      if (!state.chatContainer) {
+        if (CONFIG.DEBUG_MODE && state.totalClicks === 0) {
+          console.log('[Duck Hunt] ⚠️  Chat container not found yet, will retry...');
+        }
+        return;
+      }
+      console.log('[Duck Hunt] 📦 Chat container found:', state.chatContainer);
+    }
+
+    // Get current dimensions
+    const chatRect = state.chatContainer.getBoundingClientRect();
     
-    if (targets.length > 0) {
-      // Shoot the highest priority target
-      const target = targets[0];
-      shootDuck(target);
+    // Verify chat is visible
+    if (chatRect.width < CONFIG.MIN_AREA_SIZE || chatRect.height < CONFIG.MIN_AREA_SIZE) {
+      if (CONFIG.DEBUG_MODE && state.totalClicks % 100 === 0) {
+        console.log('[Duck Hunt] ⚠️  Chat area too small or hidden');
+      }
+      return;
+    }
+
+    // Generate random points
+    const points = generateClickPoints(chatRect);
+    
+    // Click on each point
+    for (const point of points) {
+      clickAt(point.x, point.y);
     }
   }
 
-  // Start the auto-shooter
+  // Start the rapid clicker
   function start() {
-    console.log('[Duck Hunt] 🚀 Starting auto-shooter with config:', CONFIG);
+    console.log('[Duck Hunt] 🚀 Starting rapid clicker with config:', CONFIG);
+    console.log('[Duck Hunt] 🎯 Strategy: Click rapidly on empty spaces in chat to hit flying ducks');
     
-    // Periodic scanning
-    const scanInterval = setInterval(scanAndShoot, CONFIG.CHECK_INTERVAL);
+    state.isActive = true;
 
-    // MutationObserver for immediate detection
-    const observer = new MutationObserver((mutations) => {
-      const hasNewNodes = mutations.some(m => m.addedNodes.length > 0);
-      if (hasNewNodes) {
-        scanAndShoot();
+    // Find initial chat container
+    state.chatContainer = findChatContainer();
+    if (state.chatContainer) {
+      console.log('[Duck Hunt] ✅ Initial chat container found');
+    }
+
+    // Start rapid clicking
+    const clickInterval = setInterval(rapidClickCycle, CONFIG.CLICK_INTERVAL);
+
+    // Monitor for chat container changes
+    const observer = new MutationObserver(() => {
+      if (!state.chatContainer || !document.body.contains(state.chatContainer)) {
+        state.chatContainer = findChatContainer();
       }
     });
 
@@ -223,25 +256,26 @@
 
     // Status report
     setInterval(() => {
-      console.log(`[Duck Hunt] 📊 Status - Total shots fired: ${state.totalClicks}`);
+      console.log(`[Duck Hunt] 📊 Status - Total clicks: ${state.totalClicks}`);
     }, 30000);
 
     // Cleanup
     window.addEventListener('beforeunload', () => {
-      clearInterval(scanInterval);
+      state.isActive = false;
+      clearInterval(clickInterval);
       observer.disconnect();
       console.log('[Duck Hunt] 👋 Shutting down...');
     });
 
-    console.log('[Duck Hunt] ✅ Auto-shooter is now ACTIVE!');
-    console.log('[Duck Hunt] 👀 Watching for ducks in the chat area...');
+    console.log('[Duck Hunt] ✅ Rapid clicker is now ACTIVE!');
+    console.log('[Duck Hunt] 🔥 Clicking rapidly in empty chat spaces...');
   }
 
   // Wait a moment for page to load, then start
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => setTimeout(start, 500));
+    document.addEventListener('DOMContentLoaded', () => setTimeout(start, 1000));
   } else {
-    setTimeout(start, 500);
+    setTimeout(start, 1000);
   }
 
 })();
