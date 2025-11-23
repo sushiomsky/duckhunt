@@ -52,8 +52,9 @@
 
   // Function to scan for existing ducks
   function scanForDucks() {
-    const allElements = document.querySelectorAll('*');
-    allElements.forEach(element => {
+    // Use more specific selectors to improve performance
+    const possibleDucks = document.querySelectorAll('[class*="duck" i], [id*="duck" i], [data-duck], duck');
+    possibleDucks.forEach(element => {
       if (isDuckElement(element)) {
         clickDuck(element);
       }
@@ -81,6 +82,7 @@
       
       // Check if any existing elements became ducks (class changes)
       if (mutation.type === 'attributes' && 
+          mutation.attributeName &&
           (mutation.attributeName === 'class' || 
            mutation.attributeName === 'id' ||
            mutation.attributeName.includes('duck'))) {
@@ -103,8 +105,8 @@
   console.log('Duck Hunter: Starting initial scan...');
   scanForDucks();
 
-  // Periodic scan as backup (every 500ms)
-  setInterval(scanForDucks, 500);
+  // Periodic scan as backup (every 2 seconds to reduce resource usage)
+  setInterval(scanForDucks, 2000);
 
   console.log('Duck Hunter: Monitoring for ducks...');
 })();
