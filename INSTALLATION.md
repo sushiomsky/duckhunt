@@ -23,7 +23,7 @@
 
 ### Test Page
 
-This repository includes a test page (`test.html`) to verify the extension works correctly:
+This repository includes a test page (`test-rapid-clicking.html`) to verify the extension works correctly:
 
 1. Start a local web server:
    ```bash
@@ -32,34 +32,33 @@ This repository includes a test page (`test.html`) to verify the extension works
 
 2. Open your browser and go to:
    ```
-   http://localhost:8000/test.html
+   http://localhost:8000/test-rapid-clicking.html
    ```
 
-3. Click the "Spawn Duck" buttons to create test ducks
-4. Scroll the page and spawn ducks at different positions
-5. Verify the extension detects and shoots ducks correctly
-6. Check the console for logs
+3. Click the "Spawn Duck" button to create test ducks
+4. Watch the extension rapidly click in empty spaces within the chat area
+5. Verify that ducks are being hit
+6. Verify that chat elements (messages, avatars, hearts) are NOT being clicked
+7. Check the console for logs
 
-## Verifying the Bug Fix
+### Expected Behavior
 
-The original issue was that ducks would appear to fly at the bottom of the page after scrolling. To verify this is fixed:
-
-1. Open the test page (`test.html`)
-2. Scroll down the page significantly
-3. Click "Spawn Duck at Top", "Middle", or "Bottom"
-4. Check the browser console logs
-5. Verify the duck position is calculated correctly with scroll offset
-6. The duck should be clicked successfully regardless of scroll position
+The extension should:
+- Find the chat container automatically
+- Click rapidly (20 random points every 50ms) in empty spaces
+- Avoid clicking on text, avatars, hearts, buttons, and links
+- Successfully hit flying ducks without clicking on UI elements
 
 ### Expected Console Output
 
 ```
-Duck Hunt Auto-Shooter loaded
-Duck Hunt Auto-Shooter is now active!
-Spawned duck #1 at position: top=100px, left=938px, scroll=500px
-Found 1 duck(s)!
-Shooting duck at position: x=938, y=100
-Duck shot successfully!
+[Duck Hunt] 🦆 Extension loaded and initializing...
+[Duck Hunt] 🚀 Starting rapid clicker with config: ...
+[Duck Hunt] 📦 Chat container found: <div class="chat-container">
+[Duck Hunt] ✅ Rapid clicker is now ACTIVE!
+[Duck Hunt] 🔥 Clicking rapidly in empty chat spaces...
+[Duck Hunt] 💥 Click #100 at (245, 387) on DIV
+[Duck Hunt] 📊 Status - Total clicks: 1000
 ```
 
 ## Troubleshooting
@@ -72,21 +71,22 @@ Duck shot successfully!
 4. **Reload the extension**: On `chrome://extensions/`, click the reload button for this extension
 5. **Reload the page**: Refresh the duckdice.io page
 
-### Ducks Not Being Detected
+### Ducks Not Being Hit
 
 1. **Check if ducks are visible**: Ducks on duckdice.io only appear when the chat window is open
-2. **Check console logs**: The extension logs when it detects ducks
-3. **Verify selectors**: The extension looks for elements with "duck" in their class/id names
-4. **Test with test.html**: Use the included test page to verify basic functionality
+2. **Check console logs**: The extension logs its activity every 30 seconds
+3. **Verify chat detection**: Check console for "Chat container found" message
+4. **Test with test-rapid-clicking.html**: Use the included test page to verify basic functionality
+5. **Check click rate**: The extension should be clicking very rapidly in the chat area
 
-### Position Issues
+### Chat Elements Being Clicked
 
-If ducks still appear at wrong positions:
+If the extension is clicking on unwanted elements:
 
-1. **Clear browser cache**: Old cached JavaScript might interfere
-2. **Check scroll position**: Open console and verify `window.scrollY` is being calculated correctly
-3. **Test on test page**: The test page shows exact positions and scroll offsets
-4. **Check console logs**: Look for position calculations in the logs
+1. **Check console warnings**: Look for "Chat element clicked" messages
+2. **Verify avoidance logic**: The extension should skip text, images, buttons, and links
+3. **Test with test page**: The test page tracks if chat elements are being clicked
+4. **Report the issue**: Note which specific elements are being clicked for debugging
 
 ## Uninstalling
 
@@ -101,7 +101,8 @@ If ducks still appear at wrong positions:
 - Ducks appear randomly when the chat window is open
 - Each successful duck shot awards approximately 0.00001 BTC
 - The extension is for educational purposes only
-- Extension automatically clicks ducks within 100ms of detection
+- The extension clicks very rapidly (20 points every 50ms) in empty spaces
+- Avoids clicking on text, avatars, hearts, buttons, and other UI elements
 
 ## Support
 
@@ -114,8 +115,9 @@ If you encounter issues:
 
 ## Technical Details
 
-- **Detection Method**: CSS selectors + MutationObserver
-- **Detection Interval**: 100ms
-- **Click Delay**: 50ms
-- **Scroll Calculation**: Uses `window.scrollY/scrollX` with fallbacks
+- **Approach**: Rapid clicking on empty spaces in chat area
+- **Click Interval**: 50ms (very fast)
+- **Points per Cycle**: 20 random points
+- **Chat Detection**: Multiple selector strategies with MutationObserver
+- **Avoidance**: Smart filtering to prevent clicking on UI elements
 - **Browser Support**: Chrome with Manifest V3 support
