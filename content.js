@@ -26,6 +26,7 @@
   const state = {
     totalClicks: 0,
     chatContainer: null,
+    cachedChatRect: null,
     isActive: false
   };
 
@@ -102,7 +103,7 @@
       // Avoid elements with text content (to avoid clicking on messages)
       const textContent = element.textContent?.trim() || '';
       if (textContent.length > 0 && element.children.length === 0) {
-        // This is a text node (leaf element with text)
+        // This is a leaf element containing text (e.g., span with message text)
         return true;
       }
 
@@ -149,6 +150,7 @@
       // Skip if we should avoid this element
       if (shouldAvoidElement(element)) {
         if (CONFIG.DEBUG_MODE && state.totalClicks % 100 === 0) {
+          // Only format coordinates when actually logging
           console.log(`[Duck Hunt] ⏭️  Skipping click at (${x.toFixed(0)}, ${y.toFixed(0)}) - avoiding ${element?.tagName || 'unknown'}`);
         }
         return false;
@@ -157,6 +159,7 @@
       state.totalClicks++;
 
       if (CONFIG.DEBUG_MODE && state.totalClicks % 100 === 0) {
+        // Only format coordinates when actually logging
         console.log(`[Duck Hunt] 💥 Click #${state.totalClicks} at (${x.toFixed(0)}, ${y.toFixed(0)}) on ${element?.tagName || 'unknown'}`);
       }
 
@@ -203,10 +206,12 @@
         return;
       }
       console.log('[Duck Hunt] 📦 Chat container found:', state.chatContainer);
+      // Cache the initial rect
+      state.cachedChatRect = state.chatContainer.getBoundingClientRect();
     }
 
-    // Get current dimensions
-    const chatRect = state.chatContainer.getBoundingClientRect();
+    // Use cached dimensions (will be updated on resize/container changes)
+    const chatRect = state.cachedChatRect || state.chatContainer.getBoundingClientRect();
     
     // Verify chat is visible
     if (chatRect.width < CONFIG.MIN_AREA_SIZE || chatRect.height < CONFIG.MIN_AREA_SIZE) {
@@ -245,6 +250,14 @@
     const observer = new MutationObserver(() => {
       if (!state.chatContainer || !document.body.contains(state.chatContainer)) {
         state.chatContainer = findChatContainer();
+        state.cachedChatRect = null; // Invalidate cache
+      }
+    });
+
+    // Update cache on window resize
+    window.addEventListener('resize', () => {
+      if (state.chatContainer) {
+        state.cachedChatRect = state.chatContainer.getBoundingClientRect();
       }
     });
 
