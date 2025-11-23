@@ -12,6 +12,7 @@
     POINTS_PER_CYCLE: 20,        // Generate 20 random points per cycle
     MIN_AREA_SIZE: 100,          // Minimum chat area size to start clicking
     DEBUG_MODE: true,            // Enable detailed logging
+    DUCK_HUNT_CHECK_INTERVAL: 1000, // Check if duck hunt is active every 1000ms
     CHAT_SELECTORS: [            // Possible selectors for the chat container
       '[class*="chat"]',
       '[id*="chat"]',
@@ -19,6 +20,14 @@
       '[id*="Chat"]',
       '[class*="message"]',
       '[class*="Message"]'
+    ],
+    DUCK_HUNT_SELECTORS: [       // Selectors to detect if duck hunt mode is active
+      '[class*="duck"]',
+      '[class*="Duck"]',
+      '[id*="duck"]',
+      '[id*="Duck"]',
+      '[class*="hunt"]',
+      '[class*="Hunt"]'
     ]
   };
 
@@ -27,8 +36,57 @@
     totalClicks: 0,
     chatContainer: null,
     cachedChatRect: null,
-    isActive: false
+    isActive: false,
+    isDuckHuntActive: false,
+    clickInterval: null
   };
+
+  // Check if duck hunt mode is currently active
+  function isDuckHuntModeActive() {
+    // Strategy 1: Look for duck hunt specific elements
+    for (const selector of CONFIG.DUCK_HUNT_SELECTORS) {
+      const elements = document.querySelectorAll(selector);
+      if (elements.length > 0) {
+        // Check if any of these elements are visible and not just part of the UI
+        for (const el of elements) {
+          const rect = el.getBoundingClientRect();
+          const style = window.getComputedStyle(el);
+          if (rect.width > 0 && rect.height > 0 &&
+              style.display !== 'none' && 
+              style.visibility !== 'hidden') {
+            // Found a visible duck hunt element
+            return true;
+          }
+        }
+      }
+    }
+
+    // Strategy 2: Check for canvas elements that might be the game
+    const canvases = document.querySelectorAll('canvas');
+    for (const canvas of canvases) {
+      const rect = canvas.getBoundingClientRect();
+      const style = window.getComputedStyle(canvas);
+      // Look for positioned canvas elements that might be ducks
+      if ((style.position === 'absolute' || style.position === 'fixed') &&
+          rect.width > 30 && rect.height > 30 &&
+          style.display !== 'none') {
+        return true;
+      }
+    }
+
+    // Strategy 3: Look for images with duck in the src
+    const images = document.querySelectorAll('img');
+    for (const img of images) {
+      if (img.src && img.src.toLowerCase().includes('duck')) {
+        const rect = img.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
 
   // Find the chat container on the page
   function findChatContainer() {
@@ -231,27 +289,80 @@
   }
 
   // Start the rapid clicker
-  function start() {
-    console.log('[Duck Hunt] 🚀 Starting rapid clicker with config:', CONFIG);
-    console.log('[Duck Hunt] 🎯 Strategy: Click rapidly on empty spaces in chat to hit flying ducks');
+  function startClicking() {
+    if (state.isActive) return; // Already active
+    
+    console.log('[Duck Hunt] 🚀 Duck Hunt mode detected - Starting rapid clicker');
     
     state.isActive = true;
 
     // Find initial chat container
     state.chatContainer = findChatContainer();
     if (state.chatContainer) {
-      console.log('[Duck Hunt] ✅ Initial chat container found');
+      console.log('[Duck Hunt] ✅ Chat container found');
     }
 
     // Start rapid clicking
-    const clickInterval = setInterval(rapidClickCycle, CONFIG.CLICK_INTERVAL);
+    state.clickInterval = setInterval(rapidClickCycle, CONFIG.CLICK_INTERVAL);
 
-    // Monitor for chat container changes
+    console.log('[Duck Hunt] ✅ Rapid clicker is now ACTIVE!');
+    console.log('[Duck Hunt] 🔥 Clicking rapidly in empty chat spaces...');
+  }
+
+  // Stop the rapid clicker
+  function stopClicking() {
+    if (!state.isActive) return; // Already inactive
+    
+    console.log('[Duck Hunt] 🛑 Duck Hunt mode ended - Stopping rapid clicker');
+    
+    state.isActive = false;
+    if (state.clickInterval) {
+      clearInterval(state.clickInterval);
+      state.clickInterval = null;
+    }
+    
+    console.log('[Duck Hunt] ⏸️  Rapid clicker is now INACTIVE');
+  }
+
+  // Monitor duck hunt status
+  function monitorDuckHuntStatus() {
+    const isActive = isDuckHuntModeActive();
+    
+    if (isActive && !state.isDuckHuntActive) {
+      // Duck hunt just became active
+      state.isDuckHuntActive = true;
+      startClicking();
+    } else if (!isActive && state.isDuckHuntActive) {
+      // Duck hunt just became inactive
+      state.isDuckHuntActive = false;
+      stopClicking();
+    }
+  }
+
+  // Initialize the extension
+  function initialize() {
+    console.log('[Duck Hunt] 🦆 Extension loaded and monitoring...');
+    console.log('[Duck Hunt] 🎯 Strategy: Click rapidly on empty spaces in chat to hit flying ducks');
+    console.log('[Duck Hunt] 👀 Waiting for Duck Hunt mode to activate...');
+
+    // Check duck hunt status periodically
+    setInterval(monitorDuckHuntStatus, CONFIG.DUCK_HUNT_CHECK_INTERVAL);
+
+    // Also check on DOM changes for faster detection
     const observer = new MutationObserver(() => {
-      if (!state.chatContainer || !document.body.contains(state.chatContainer)) {
+      monitorDuckHuntStatus();
+      
+      // Update chat container if needed
+      if (state.isActive && (!state.chatContainer || !document.body.contains(state.chatContainer))) {
         state.chatContainer = findChatContainer();
         state.cachedChatRect = null; // Invalidate cache
       }
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true // Watch for attribute changes too (classes might change)
     });
 
     // Update cache on window resize
@@ -261,34 +372,31 @@
       }
     });
 
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: false
-    });
-
     // Status report
     setInterval(() => {
-      console.log(`[Duck Hunt] 📊 Status - Total clicks: ${state.totalClicks}`);
+      if (state.isActive) {
+        console.log(`[Duck Hunt] 📊 Status - Total clicks: ${state.totalClicks}`);
+      } else {
+        console.log('[Duck Hunt] 💤 Status - Waiting for Duck Hunt mode...');
+      }
     }, 30000);
 
     // Cleanup
     window.addEventListener('beforeunload', () => {
-      state.isActive = false;
-      clearInterval(clickInterval);
+      stopClicking();
       observer.disconnect();
       console.log('[Duck Hunt] 👋 Shutting down...');
     });
 
-    console.log('[Duck Hunt] ✅ Rapid clicker is now ACTIVE!');
-    console.log('[Duck Hunt] 🔥 Clicking rapidly in empty chat spaces...');
+    // Do initial check
+    monitorDuckHuntStatus();
   }
 
-  // Wait a moment for page to load, then start
+  // Wait a moment for page to load, then initialize
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => setTimeout(start, 1000));
+    document.addEventListener('DOMContentLoaded', () => setTimeout(initialize, 1000));
   } else {
-    setTimeout(start, 1000);
+    setTimeout(initialize, 1000);
   }
 
 })();
