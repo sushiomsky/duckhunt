@@ -38,7 +38,10 @@
     cachedChatRect: null,
     isActive: false,
     isDuckHuntActive: false,
-    clickInterval: null
+    clickInterval: null,
+    monitorInterval: null,
+    statusInterval: null,
+    lastMonitorCheck: 0
   };
 
   // Check if duck hunt mode is currently active
@@ -346,11 +349,16 @@
     console.log('[Duck Hunt] 👀 Waiting for Duck Hunt mode to activate...');
 
     // Check duck hunt status periodically
-    setInterval(monitorDuckHuntStatus, CONFIG.DUCK_HUNT_CHECK_INTERVAL);
+    state.monitorInterval = setInterval(monitorDuckHuntStatus, CONFIG.DUCK_HUNT_CHECK_INTERVAL);
 
-    // Also check on DOM changes for faster detection
+    // Also check on DOM changes for faster detection (throttled)
     const observer = new MutationObserver(() => {
-      monitorDuckHuntStatus();
+      const now = Date.now();
+      // Throttle to at most once per second to avoid excessive checks
+      if (now - state.lastMonitorCheck >= 1000) {
+        state.lastMonitorCheck = now;
+        monitorDuckHuntStatus();
+      }
       
       // Update chat container if needed
       if (state.isActive && (!state.chatContainer || !document.body.contains(state.chatContainer))) {
@@ -373,7 +381,7 @@
     });
 
     // Status report
-    setInterval(() => {
+    state.statusInterval = setInterval(() => {
       if (state.isActive) {
         console.log(`[Duck Hunt] 📊 Status - Total clicks: ${state.totalClicks}`);
       } else {
@@ -384,6 +392,8 @@
     // Cleanup
     window.addEventListener('beforeunload', () => {
       stopClicking();
+      if (state.monitorInterval) clearInterval(state.monitorInterval);
+      if (state.statusInterval) clearInterval(state.statusInterval);
       observer.disconnect();
       console.log('[Duck Hunt] 👋 Shutting down...');
     });
