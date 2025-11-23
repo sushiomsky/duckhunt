@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Duckdice Auto Duck Hunter",
+  "version": "1.0",
+  "description": "Automatically clicks on ducks in Duckdice chat",
+  "permissions": [],
+  "content_scripts": [
+    {
+      "matches": ["*://*.duckdice.io/*"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}
