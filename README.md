@@ -1,13 +1,18 @@
-# DuckDice Duck Hunt Auto-Shooter
+# DuckDice Duck Hunt Auto-Shooter v2.0
 
-A Chrome extension that automatically shoots ducks in the DuckDice Duck Hunt bonus game by rapidly clicking on empty spaces in the chat area.
+An intelligent Chrome extension that automatically detects and shoots ducks in the DuckDice Duck Hunt bonus game using advanced DOM monitoring and targeted clicking.
 
 ## Features
 
-- **Automatic activation** - Only clicks when Duck Hunt mode is active on the site
-- Rapidly clicks empty spaces in the chat area to hit flying ducks
+- **Intelligent Duck Detection** - Actively searches for and identifies duck elements in the DOM
+- **Direct Duck Targeting** - Clicks directly on detected duck elements for higher accuracy
+- **Automatic activation** - Only activates when Duck Hunt mode is active on the site
+- **Dual Strategy Approach**:
+  1. Primary: Detects duck elements (canvas, images) and clicks them directly
+  2. Fallback: Rapid clicking on empty spaces when ducks not detected
 - Intelligently avoids clicking on text, avatars, hearts, and other UI elements
-- High-speed clicking (20 clicks per cycle, every 50ms)
+- High-speed operation (checks for ducks every 100ms, clicks every 30ms)
+- Real-time duck tracking and hit counting
 - Automatically detects and adapts to the chat container
 - Works with dynamic content loading
 
@@ -24,23 +29,40 @@ A Chrome extension that automatically shoots ducks in the DuckDice Duck Hunt bon
 
 ## How It Works
 
-The extension uses a rapid-clicking approach to catch flying ducks:
+The extension uses an intelligent dual-strategy approach:
 
-1. **Monitors for Duck Hunt mode** - Continuously checks if Duck Hunt is active on the site
-2. **Auto-activates** - Starts clicking only when Duck Hunt mode is detected
-3. **Locates the chat area** - Finds the chat container on duckdice.io using multiple detection strategies
-4. **Generates random click points** - Creates 20 random coordinates within the chat area
-5. **Filters safe click zones** - Avoids clicking on:
+### Primary Strategy: Direct Duck Detection
+1. **Monitors for Duck Hunt mode** - Continuously checks if Duck Hunt is active (every 500ms)
+2. **Active Duck Scanning** - Searches the DOM for duck elements every 100ms using multiple selectors:
+   - Canvas elements with absolute/fixed positioning
+   - Images with "duck" in src or alt text
+   - Elements with "duck" in class names or IDs
+3. **Duck Element Validation** - Verifies potential ducks by checking:
+   - Visibility (not hidden, has dimensions)
+   - Position (absolutely or fixed positioned)
+   - Size (reasonable duck dimensions: 20-300px)
+   - Viewport presence (within or near viewport)
+4. **Direct Targeting** - Clicks detected duck elements at their center point
+5. **Hit Tracking** - Tracks which ducks have been clicked to avoid duplicates
+
+### Fallback Strategy: Rapid Area Clicking
+If no duck elements are detected, the extension falls back to:
+1. **Locates the chat area** - Finds the chat container using multiple detection strategies
+2. **Generates random click points** - Creates 20 random coordinates within the chat area
+3. **Filters safe click zones** - Avoids clicking on:
    - Text content and messages
-   - Avatars and images
+   - Avatars and images (except potential ducks)
    - Hearts and reaction icons
    - Links and buttons
    - Other clickable UI elements
-6. **Rapid clicking** - Clicks on safe empty spaces every 50ms
-7. **Hits the duck** - Eventually hits the flying duck as it moves through the click zone
-8. **Auto-deactivates** - Stops clicking when Duck Hunt mode ends
+4. **Rapid clicking** - Clicks on safe empty spaces every 30ms
 
-This approach is more reliable than trying to detect the duck element directly, as it doesn't depend on specific HTML structure or class names.
+### Additional Features
+- **Auto-activation** - Starts only when Duck Hunt mode is detected
+- **Real-time statistics** - Tracks ducks hit and total clicks
+- **Auto-deactivation** - Stops when Duck Hunt mode ends
+
+This hybrid approach provides both precision (when ducks are detectable) and coverage (when they're not), making it more effective than pure rapid-clicking or pure detection approaches.
 
 ## Usage
 
@@ -52,12 +74,16 @@ This approach is more reliable than trying to detect the duck element directly, 
 
 ## Technical Details
 
+- **Version:** 2.0.0
 - **Manifest Version:** 3
 - **Permissions:** activeTab, duckdice.io host permissions
-- **Activation:** Automatic detection of Duck Hunt mode (checks every 1 second)
-- **Click Interval:** 50ms (very fast clicking when active)
-- **Points per Cycle:** 20 random points
+- **Duck Hunt Detection:** Checks every 500ms
+- **Duck Element Scanning:** Every 100ms when active
+- **Fallback Click Interval:** 30ms (very fast)
+- **Points per Cycle (Fallback):** 20 random points
+- **Duck Element Selectors:** Canvas, images, positioned elements with "duck" identifiers
 - **Avoidance:** Smart filtering to prevent clicking on UI elements
+- **Tracking:** Maintains hit count and prevents duplicate clicks on same duck
 
 ## Notes
 

@@ -1,48 +1,145 @@
-// DuckDice Duck Hunt Auto-Shooter
-// Rapidly clicks empty spaces in the chat area to hit flying ducks
+// DuckDice Duck Hunt Auto-Shooter - Improved Version
+// Intelligently detects and clicks on duck elements using advanced DOM monitoring
 
 (function() {
   'use strict';
 
-  console.log('[Duck Hunt] 🦆 Extension loaded and initializing...');
+  console.log('[Duck Hunt] 🦆 Extension v2.0 loaded and initializing...');
 
   // Configuration
   const CONFIG = {
-    CLICK_INTERVAL: 50,          // Click every 50ms (very fast)
-    POINTS_PER_CYCLE: 20,        // Generate 20 random points per cycle
+    CLICK_INTERVAL: 30,          // Click every 30ms (faster than before)
+    DUCK_CHECK_INTERVAL: 100,    // Check for ducks every 100ms
     MIN_AREA_SIZE: 100,          // Minimum chat area size to start clicking
     DEBUG_MODE: true,            // Enable detailed logging
-    DUCK_HUNT_CHECK_INTERVAL: 1000, // Check if duck hunt is active every 1000ms
-    CHAT_SELECTORS: [            // Possible selectors for the chat container
+    DUCK_HUNT_CHECK_INTERVAL: 500, // Check if duck hunt is active every 500ms
+    
+    // Selectors for the chat container
+    CHAT_SELECTORS: [
       '[class*="chat"]',
       '[id*="chat"]',
       '[class*="Chat"]',
       '[id*="Chat"]',
       '[class*="message"]',
-      '[class*="Message"]'
+      '[class*="Message"]',
+      '.chat-container',
+      '#chat-container',
+      '[data-chat]'
     ],
-    DUCK_HUNT_SELECTORS: [       // Selectors to detect if duck hunt mode is active
+    
+    // Selectors to detect if duck hunt mode is active
+    DUCK_HUNT_SELECTORS: [
       '[class*="duck"]',
       '[class*="Duck"]',
       '[id*="duck"]',
       '[id*="Duck"]',
       '[class*="hunt"]',
-      '[class*="Hunt"]'
+      '[class*="Hunt"]',
+      'canvas[class*="duck"]',
+      'img[src*="duck"]',
+      'img[alt*="duck"]'
+    ],
+    
+    // Selectors to find actual duck elements to click
+    DUCK_ELEMENT_SELECTORS: [
+      'canvas[style*="absolute"]',
+      'canvas[style*="fixed"]',
+      'img[src*="duck"]',
+      'img[alt*="duck"]',
+      '[class*="duck"]:not([class*="duckhunt-game"])',
+      'div[style*="cursor: crosshair"]',
+      '[data-duck]',
+      '[onclick*="duck"]'
     ]
   };
 
   // State management
   const state = {
     totalClicks: 0,
+    ducksHit: 0,
     chatContainer: null,
     cachedChatRect: null,
     isActive: false,
     isDuckHuntActive: false,
     clickInterval: null,
+    duckCheckInterval: null,
     monitorInterval: null,
     statusInterval: null,
-    lastMonitorCheck: 0
+    lastMonitorCheck: 0,
+    activeDucks: new Set(),  // Track currently visible ducks
+    clickedDucks: new Set(), // Track ducks we've already clicked
+    lastDuckElements: []     // Store last seen duck elements
   };
+
+  // Find actual duck elements in the DOM
+  function findDuckElements() {
+    const ducks = [];
+    
+    for (const selector of CONFIG.DUCK_ELEMENT_SELECTORS) {
+      try {
+        const elements = document.querySelectorAll(selector);
+        for (const el of elements) {
+          if (isDuckElement(el)) {
+            ducks.push(el);
+          }
+        }
+      } catch (e) {
+        // Invalid selector, skip
+      }
+    }
+    
+    return ducks;
+  }
+  
+  // Check if an element is likely a duck
+  function isDuckElement(element) {
+    if (!element) return false;
+    
+    try {
+      const rect = element.getBoundingClientRect();
+      const style = window.getComputedStyle(element);
+      
+      // Must be visible
+      if (rect.width === 0 || rect.height === 0 || 
+          style.display === 'none' || 
+          style.visibility === 'hidden' ||
+          style.opacity === '0') {
+        return false;
+      }
+      
+      // Check if it's positioned (ducks are usually absolutely positioned)
+      const isPositioned = style.position === 'absolute' || style.position === 'fixed';
+      
+      // Check size (ducks are typically between 30-200px)
+      const reasonableSize = rect.width >= 20 && rect.width <= 300 && 
+                            rect.height >= 20 && rect.height <= 300;
+      
+      // Check if it's in the viewport
+      const inViewport = rect.top >= -100 && rect.left >= -100 &&
+                        rect.bottom <= (window.innerHeight + 100) &&
+                        rect.right <= (window.innerWidth + 100);
+      
+      // For canvas elements
+      if (element.tagName === 'CANVAS') {
+        return isPositioned && reasonableSize && inViewport;
+      }
+      
+      // For images
+      if (element.tagName === 'IMG') {
+        const srcMatch = element.src && element.src.toLowerCase().includes('duck');
+        const altMatch = element.alt && element.alt.toLowerCase().includes('duck');
+        return (srcMatch || altMatch) && reasonableSize && inViewport;
+      }
+      
+      // For other elements, check class/id
+      const classId = (element.className + element.id).toLowerCase();
+      const hasDuckInName = classId.includes('duck');
+      
+      return hasDuckInName && isPositioned && reasonableSize && inViewport;
+    } catch (e) {
+      return false;
+    }
+  }
 
   // Check if duck hunt mode is currently active
   function isDuckHuntModeActive() {
@@ -86,6 +183,11 @@
           return true;
         }
       }
+    }
+    
+    // Strategy 4: Check if we have any duck elements
+    if (findDuckElements().length > 0) {
+      return true;
     }
 
     return false;
@@ -202,7 +304,72 @@
     return points;
   }
 
-  // Click at a specific point
+  // Click directly on a duck element
+  function clickDuck(duckElement) {
+    try {
+      if (!duckElement || !document.body.contains(duckElement)) {
+        return false;
+      }
+      
+      // Get the center of the duck element
+      const rect = duckElement.getBoundingClientRect();
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height / 2;
+      
+      // Mark this duck as clicked
+      const duckId = getDuckId(duckElement);
+      if (state.clickedDucks.has(duckId)) {
+        return false; // Already clicked this duck
+      }
+      state.clickedDucks.add(duckId);
+      
+      state.totalClicks++;
+      state.ducksHit++;
+      
+      console.log(`[Duck Hunt] 🎯 DUCK HIT #${state.ducksHit}! Clicked at (${x.toFixed(0)}, ${y.toFixed(0)}) on ${duckElement.tagName}`);
+      
+      // Create comprehensive click events
+      const eventOptions = {
+        view: window,
+        bubbles: true,
+        cancelable: true,
+        clientX: x,
+        clientY: y,
+        button: 0
+      };
+      
+      // Dispatch all mouse events
+      duckElement.dispatchEvent(new MouseEvent('mouseenter', eventOptions));
+      duckElement.dispatchEvent(new MouseEvent('mouseover', eventOptions));
+      duckElement.dispatchEvent(new MouseEvent('mousedown', eventOptions));
+      duckElement.dispatchEvent(new MouseEvent('mouseup', eventOptions));
+      duckElement.dispatchEvent(new MouseEvent('click', eventOptions));
+      duckElement.dispatchEvent(new PointerEvent('pointerdown', eventOptions));
+      duckElement.dispatchEvent(new PointerEvent('pointerup', eventOptions));
+      duckElement.dispatchEvent(new PointerEvent('click', eventOptions));
+      
+      // Also try clicking at the exact point
+      const targetElement = document.elementFromPoint(x, y);
+      if (targetElement && targetElement !== duckElement) {
+        targetElement.dispatchEvent(new MouseEvent('click', eventOptions));
+      }
+      
+      return true;
+    } catch (error) {
+      if (CONFIG.DEBUG_MODE) {
+        console.error('[Duck Hunt] ❌ Error clicking duck:', error);
+      }
+      return false;
+    }
+  }
+  
+  // Generate a unique ID for a duck element
+  function getDuckId(element) {
+    const rect = element.getBoundingClientRect();
+    return `${element.tagName}-${rect.left.toFixed(0)}-${rect.top.toFixed(0)}-${rect.width.toFixed(0)}-${rect.height.toFixed(0)}`;
+  }
+
+  // Click at a specific point (fallback method)
   function clickAt(x, y) {
     try {
       // Check what's at this point
@@ -253,7 +420,27 @@
     }
   }
 
-  // Main rapid clicking function
+  // Main duck hunting cycle - prioritizes actual duck elements
+  function huntDucks() {
+    if (!state.isActive) return;
+    
+    // First priority: Look for actual duck elements
+    const duckElements = findDuckElements();
+    
+    if (duckElements.length > 0) {
+      // Found ducks! Click them all
+      for (const duck of duckElements) {
+        clickDuck(duck);
+      }
+      state.lastDuckElements = duckElements;
+      return;
+    }
+    
+    // Second priority: Fall back to rapid clicking if no ducks found
+    rapidClickCycle();
+  }
+
+  // Main rapid clicking function (fallback when no ducks detected)
   function rapidClickCycle() {
     if (!state.isActive) return;
 
@@ -291,13 +478,14 @@
     }
   }
 
-  // Start the rapid clicker
+  // Start the duck hunter
   function startClicking() {
     if (state.isActive) return; // Already active
     
-    console.log('[Duck Hunt] 🚀 Duck Hunt mode detected - Starting rapid clicker');
+    console.log('[Duck Hunt] 🚀 Duck Hunt mode detected - Starting intelligent duck hunter v2.0');
     
     state.isActive = true;
+    state.clickedDucks.clear(); // Reset clicked ducks
 
     // Find initial chat container
     state.chatContainer = findChatContainer();
@@ -305,26 +493,42 @@
       console.log('[Duck Hunt] ✅ Chat container found');
     }
 
-    // Start rapid clicking
+    // Start duck checking (faster interval for duck detection)
+    state.duckCheckInterval = setInterval(huntDucks, CONFIG.DUCK_CHECK_INTERVAL);
+    
+    // Start rapid clicking as fallback (slower than duck checking)
     state.clickInterval = setInterval(rapidClickCycle, CONFIG.CLICK_INTERVAL);
 
-    console.log('[Duck Hunt] ✅ Rapid clicker is now ACTIVE!');
-    console.log('[Duck Hunt] 🔥 Clicking rapidly in empty chat spaces...');
+    console.log('[Duck Hunt] ✅ Duck hunter is now ACTIVE!');
+    console.log('[Duck Hunt] 🎯 Intelligent duck targeting enabled');
+    console.log('[Duck Hunt] 🔥 Fallback rapid clicking active');
   }
 
-  // Stop the rapid clicker
+  // Stop the duck hunter
   function stopClicking() {
     if (!state.isActive) return; // Already inactive
     
-    console.log('[Duck Hunt] 🛑 Duck Hunt mode ended - Stopping rapid clicker');
+    console.log('[Duck Hunt] 🛑 Duck Hunt mode ended - Stopping duck hunter');
     
     state.isActive = false;
+    
+    if (state.duckCheckInterval) {
+      clearInterval(state.duckCheckInterval);
+      state.duckCheckInterval = null;
+    }
+    
     if (state.clickInterval) {
       clearInterval(state.clickInterval);
       state.clickInterval = null;
     }
     
-    console.log('[Duck Hunt] ⏸️  Rapid clicker is now INACTIVE');
+    // Clear duck tracking
+    state.activeDucks.clear();
+    state.clickedDucks.clear();
+    state.lastDuckElements = [];
+    
+    console.log('[Duck Hunt] ⏸️  Duck hunter is now INACTIVE');
+    console.log(`[Duck Hunt] 📊 Final stats - Total ducks hit: ${state.ducksHit}, Total clicks: ${state.totalClicks}`);
   }
 
   // Monitor duck hunt status
@@ -344,8 +548,10 @@
 
   // Initialize the extension
   function initialize() {
-    console.log('[Duck Hunt] 🦆 Extension loaded and monitoring...');
-    console.log('[Duck Hunt] 🎯 Strategy: Click rapidly on empty spaces in chat to hit flying ducks');
+    console.log('[Duck Hunt] 🦆 Extension v2.0 loaded and monitoring...');
+    console.log('[Duck Hunt] 🎯 Strategy: Intelligent duck detection + rapid clicking fallback');
+    console.log('[Duck Hunt] 🔍 Monitors DOM for duck elements and clicks them directly');
+    console.log('[Duck Hunt] 💥 Falls back to rapid clicking when ducks not detected');
     console.log('[Duck Hunt] 👀 Waiting for Duck Hunt mode to activate...');
 
     // Check duck hunt status periodically
@@ -383,7 +589,8 @@
     // Status report
     state.statusInterval = setInterval(() => {
       if (state.isActive) {
-        console.log(`[Duck Hunt] 📊 Status - Total clicks: ${state.totalClicks}`);
+        const duckElements = findDuckElements();
+        console.log(`[Duck Hunt] 📊 Status - Ducks hit: ${state.ducksHit}, Total clicks: ${state.totalClicks}, Current ducks visible: ${duckElements.length}`);
       } else {
         console.log('[Duck Hunt] 💤 Status - Waiting for Duck Hunt mode...');
       }
