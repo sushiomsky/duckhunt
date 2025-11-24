@@ -111,7 +111,7 @@
       // Check if it's positioned (ducks are usually absolutely positioned)
       const isPositioned = style.position === 'absolute' || style.position === 'fixed';
       
-      // Check size (ducks are typically between 30-200px)
+      // Check size (ducks are typically between 20-300px)
       const reasonableSize = rect.width >= 20 && rect.width <= 300 && 
                             rect.height >= 20 && rect.height <= 300;
       

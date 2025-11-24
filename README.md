@@ -9,9 +9,9 @@ An intelligent Chrome extension that automatically detects and shoots ducks in t
 - **Automatic activation** - Only activates when Duck Hunt mode is active on the site
 - **Dual Strategy Approach**:
   1. Primary: Detects duck elements (canvas, images) and clicks them directly
-  2. Fallback: Rapid clicking on empty spaces when ducks not detected
+  2. Fallback: Throttled clicking on empty spaces when ducks not detected (every 300ms)
 - Intelligently avoids clicking on text, avatars, hearts, and other UI elements
-- High-speed operation (checks for ducks every 100ms, clicks every 30ms)
+- High-speed operation (checks for ducks every 100ms, fallback clicks every 300ms when needed)
 - Real-time duck tracking and hit counting
 - Automatically detects and adapts to the chat container
 - Works with dynamic content loading
@@ -45,7 +45,7 @@ The extension uses an intelligent dual-strategy approach:
 4. **Direct Targeting** - Clicks detected duck elements at their center point
 5. **Hit Tracking** - Tracks which ducks have been clicked to avoid duplicates
 
-### Fallback Strategy: Rapid Area Clicking
+### Fallback Strategy: Throttled Area Clicking
 If no duck elements are detected, the extension falls back to:
 1. **Locates the chat area** - Finds the chat container using multiple detection strategies
 2. **Generates random click points** - Creates 20 random coordinates within the chat area
@@ -55,7 +55,7 @@ If no duck elements are detected, the extension falls back to:
    - Hearts and reaction icons
    - Links and buttons
    - Other clickable UI elements
-4. **Rapid clicking** - Clicks on safe empty spaces every 30ms
+4. **Throttled clicking** - Clicks on safe empty spaces every 300ms (when no ducks detected)
 
 ### Additional Features
 - **Auto-activation** - Starts only when Duck Hunt mode is detected
@@ -79,7 +79,7 @@ This hybrid approach provides both precision (when ducks are detectable) and cov
 - **Permissions:** activeTab, duckdice.io host permissions
 - **Duck Hunt Detection:** Checks every 500ms
 - **Duck Element Scanning:** Every 100ms when active
-- **Fallback Click Interval:** 30ms (very fast)
+- **Fallback Click Interval:** 300ms (throttled to reduce CPU usage)
 - **Points per Cycle (Fallback):** 20 random points
 - **Duck Element Selectors:** Canvas, images, positioned elements with "duck" identifiers
 - **Avoidance:** Smart filtering to prevent clicking on UI elements
