@@ -8,8 +8,8 @@
 
   // Configuration
   const CONFIG = {
-    CLICK_INTERVAL: 30,          // Click every 30ms (faster than before)
     DUCK_CHECK_INTERVAL: 100,    // Check for ducks every 100ms
+    FALLBACK_THROTTLE: 300,      // Throttle fallback clicking to every 300ms
     POINTS_PER_CYCLE: 20,        // Generate 20 random points per cycle (fallback mode)
     MIN_AREA_SIZE: 100,          // Minimum chat area size to start clicking
     DEBUG_MODE: true,            // Enable detailed logging
@@ -62,7 +62,6 @@
     cachedChatRect: null,
     isActive: false,
     isDuckHuntActive: false,
-    clickInterval: null,
     duckCheckInterval: null,
     monitorInterval: null,
     statusInterval: null,
@@ -440,8 +439,8 @@
     
     // Second priority: Fall back to rapid clicking if no ducks found
     // Only do fallback clicking occasionally to avoid excessive CPU usage
-    // We check for ducks every 100ms, but only do fallback clicking every ~300ms
-    if (!state.lastFallbackTime || Date.now() - state.lastFallbackTime >= 300) {
+    // We check for ducks every 100ms, but only do fallback clicking every CONFIG.FALLBACK_THROTTLE ms
+    if (!state.lastFallbackTime || Date.now() - state.lastFallbackTime >= CONFIG.FALLBACK_THROTTLE) {
       rapidClickCycle();
       state.lastFallbackTime = Date.now();
     }
@@ -522,15 +521,11 @@
       state.duckCheckInterval = null;
     }
     
-    if (state.clickInterval) {
-      clearInterval(state.clickInterval);
-      state.clickInterval = null;
-    }
-    
     // Clear duck tracking
     state.activeDucks.clear();
     state.clickedDucks.clear();
     state.lastDuckElements = [];
+    state.lastFallbackTime = 0;
     
     console.log('[Duck Hunt] ⏸️  Duck hunter is now INACTIVE');
     console.log(`[Duck Hunt] 📊 Final stats - Total ducks hit: ${state.ducksHit}, Total clicks: ${state.totalClicks}`);
