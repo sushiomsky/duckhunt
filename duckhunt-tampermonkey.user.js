@@ -1,10 +1,24 @@
+// ==UserScript==
+// @name         DuckDice Duck Hunt Auto-Shooter v2.0
+// @namespace    https://github.com/sushiomsky/duckhunt
+// @version      2.0.0
+// @description  Intelligent duck hunting for DuckDice - detects and shoots ducks automatically using advanced DOM monitoring
+// @author       sushiomsky
+// @match        https://duckdice.io/*
+// @icon         https://www.google.com/s2/favicons?sz=64&domain=duckdice.io
+// @grant        none
+// @run-at       document-idle
+// @updateURL    https://raw.githubusercontent.com/sushiomsky/duckhunt/main/duckhunt-tampermonkey.user.js
+// @downloadURL  https://raw.githubusercontent.com/sushiomsky/duckhunt/main/duckhunt-tampermonkey.user.js
+// ==/UserScript==
+
 // DuckDice Duck Hunt Auto-Shooter - Improved Version
 // Intelligently detects and clicks on duck elements using advanced DOM monitoring
 
 (function() {
   'use strict';
 
-  console.log('[Duck Hunt] 🦆 Extension v2.0 loaded and initializing...');
+  console.log('[Duck Hunt] 🦆 Tampermonkey Script v2.0 loaded and initializing...');
 
   // Configuration
   const CONFIG = {
@@ -546,9 +560,9 @@
     }
   }
 
-  // Initialize the extension
+  // Initialize the script
   function initialize() {
-    console.log('[Duck Hunt] 🦆 Extension v2.0 loaded and monitoring...');
+    console.log('[Duck Hunt] 🦆 Tampermonkey Script v2.0 loaded and monitoring...');
     console.log('[Duck Hunt] 🎯 Strategy: Intelligent duck detection + rapid clicking fallback');
     console.log('[Duck Hunt] 🔍 Monitors DOM for duck elements and clicks them directly');
     console.log('[Duck Hunt] 💥 Falls back to rapid clicking when ducks not detected');
