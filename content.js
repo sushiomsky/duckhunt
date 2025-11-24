@@ -10,6 +10,7 @@
   const CONFIG = {
     CLICK_INTERVAL: 30,          // Click every 30ms (faster than before)
     DUCK_CHECK_INTERVAL: 100,    // Check for ducks every 100ms
+    POINTS_PER_CYCLE: 20,        // Generate 20 random points per cycle (fallback mode)
     MIN_AREA_SIZE: 100,          // Minimum chat area size to start clicking
     DEBUG_MODE: true,            // Enable detailed logging
     DUCK_HUNT_CHECK_INTERVAL: 500, // Check if duck hunt is active every 500ms
@@ -66,6 +67,7 @@
     monitorInterval: null,
     statusInterval: null,
     lastMonitorCheck: 0,
+    lastFallbackTime: 0,     // Track when we last did fallback clicking
     activeDucks: new Set(),  // Track currently visible ducks
     clickedDucks: new Set(), // Track ducks we've already clicked
     lastDuckElements: []     // Store last seen duck elements
@@ -437,7 +439,12 @@
     }
     
     // Second priority: Fall back to rapid clicking if no ducks found
-    rapidClickCycle();
+    // Only do fallback clicking occasionally to avoid excessive CPU usage
+    // We check for ducks every 100ms, but only do fallback clicking every ~300ms
+    if (!state.lastFallbackTime || Date.now() - state.lastFallbackTime >= 300) {
+      rapidClickCycle();
+      state.lastFallbackTime = Date.now();
+    }
   }
 
   // Main rapid clicking function (fallback when no ducks detected)
@@ -493,15 +500,13 @@
       console.log('[Duck Hunt] ✅ Chat container found');
     }
 
-    // Start duck checking (faster interval for duck detection)
+    // Start duck hunting cycle (combines detection and clicking)
+    // Use the faster interval for duck checking - it handles both strategies
     state.duckCheckInterval = setInterval(huntDucks, CONFIG.DUCK_CHECK_INTERVAL);
-    
-    // Start rapid clicking as fallback (slower than duck checking)
-    state.clickInterval = setInterval(rapidClickCycle, CONFIG.CLICK_INTERVAL);
 
     console.log('[Duck Hunt] ✅ Duck hunter is now ACTIVE!');
     console.log('[Duck Hunt] 🎯 Intelligent duck targeting enabled');
-    console.log('[Duck Hunt] 🔥 Fallback rapid clicking active');
+    console.log('[Duck Hunt] 🔥 Rapid clicking fallback available');
   }
 
   // Stop the duck hunter
