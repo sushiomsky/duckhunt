@@ -1,6 +1,6 @@
 # DuckDice Duck Hunt Auto-Shooter v2.0
 
-An intelligent Chrome extension that automatically detects and shoots ducks in the DuckDice Duck Hunt bonus game using advanced DOM monitoring and targeted clicking.
+An intelligent browser extension/userscript that automatically detects and shoots ducks in the DuckDice Duck Hunt bonus game using advanced DOM monitoring and targeted clicking.
 
 ## Features
 
@@ -18,7 +18,18 @@ An intelligent Chrome extension that automatically detects and shoots ducks in t
 
 ## Installation
 
-### Installing from Source
+### Option 1: Tampermonkey/Greasemonkey (Recommended)
+
+**Works on:** Chrome, Firefox, Edge, Safari, Opera
+
+1. Install [Tampermonkey](https://www.tampermonkey.net/) or [Greasemonkey](https://www.greasespot.net/) browser extension
+2. Click here to install: [duckhunt-tampermonkey.user.js](https://raw.githubusercontent.com/sushiomsky/duckhunt/main/duckhunt-tampermonkey.user.js)
+3. Tampermonkey will prompt you to install the script
+4. Navigate to https://duckdice.io and the script will automatically activate when duck hunt mode is detected
+
+### Option 2: Chrome Extension (from Source)
+
+**Works on:** Chrome, Edge, Brave
 
 1. Clone this repository or download the ZIP
 2. Open Chrome and navigate to `chrome://extensions/`
@@ -75,8 +86,8 @@ This hybrid approach provides both precision (when ducks are detectable) and cov
 ## Technical Details
 
 - **Version:** 2.0.0
-- **Manifest Version:** 3
-- **Permissions:** activeTab, duckdice.io host permissions
+- **Available as:** Chrome Extension (Manifest V3) & Tampermonkey/Greasemonkey Userscript
+- **Permissions:** activeTab, duckdice.io host permissions (Chrome extension only)
 - **Duck Hunt Detection:** Checks every 500ms
 - **Duck Element Scanning:** Every 100ms when active
 - **Fallback Click Interval:** 300ms (throttled to reduce CPU usage)
@@ -84,6 +95,13 @@ This hybrid approach provides both precision (when ducks are detectable) and cov
 - **Duck Element Selectors:** Canvas, images, positioned elements with "duck" identifiers
 - **Avoidance:** Smart filtering to prevent clicking on UI elements
 - **Tracking:** Maintains hit count and prevents duplicate clicks on same duck
+
+## Files
+
+- **content.js** - Chrome extension content script
+- **duckhunt-tampermonkey.user.js** - Tampermonkey/Greasemonkey userscript (recommended)
+- **manifest.json** - Chrome extension manifest
+- **README.md** - This file
 
 ## Notes
 
