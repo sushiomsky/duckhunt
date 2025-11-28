@@ -23,6 +23,22 @@ const defaultSettings = {
 let statsInterval = null;
 
 /**
+ * Validates if the URL is from the expected duckdice.io domain
+ * @param {string} url - URL to validate
+ * @returns {boolean} Whether the URL is valid
+ */
+function isDuckDiceUrl(url) {
+    if (!url) return false;
+    try {
+        const urlObj = new URL(url);
+        // Check if hostname is exactly duckdice.io or a subdomain of it
+        return urlObj.hostname === 'duckdice.io' || urlObj.hostname.endsWith('.duckdice.io');
+    } catch {
+        return false;
+    }
+}
+
+/**
  * Load settings from Chrome storage
  */
 async function loadSettings() {
@@ -51,7 +67,7 @@ async function saveSettings() {
         
         // Send message to content script to update settings
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tab && tab.url && tab.url.includes('duckdice.io')) {
+        if (tab && isDuckDiceUrl(tab.url)) {
             chrome.tabs.sendMessage(tab.id, { 
                 type: 'UPDATE_SETTINGS', 
                 settings: settings 
@@ -73,7 +89,7 @@ async function saveSettings() {
 async function requestStats() {
     try {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tab && tab.url && tab.url.includes('duckdice.io')) {
+        if (tab && isDuckDiceUrl(tab.url)) {
             chrome.tabs.sendMessage(tab.id, { type: 'GET_STATS' }, (response) => {
                 // Check for runtime errors (e.g., content script not ready)
                 if (chrome.runtime.lastError) {
