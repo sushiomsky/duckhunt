@@ -1,29 +1,30 @@
 {
-    "manifest_version": 3,
-    "name": "DuckDice Auto Hunter",
-    "version": "1.0",
-    "description": "Automatically catches ducks on duckdice.io with real-time WebSocket monitoring.",
-    "icons": {
-        "16": "icon16.png",
-        "48": "icon48.png",
-        "128": "icon128.png"
-    },
-    "action": {
-        "default_popup": "popup.html",
-        "default_icon": {
-            "16": "icon16.png",
-            "48": "icon48.png",
-            "128": "icon128.png"
-        },
-        "default_title": "Duck Hunter"
-    },
-    "content_scripts": [
-        {
-            "matches": ["*://duckdice.io/*"],
-            "js": ["content_script.js"],
-            "run_at": "document_start"
-        }
-    ],
-    "permissions": ["activeTab", "storage"],
-    "host_permissions": ["*://duckdice.io/"]
+  "manifest_version": 3,
+  "name": "DuckDice Auto DuckHunt",
+  "version": "1.0.0",
+  "description": "Automatically detect ducks in chat and replay the original shoot WebSocket packet.",
+  "permissions": [
+    "scripting",
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://duckdice.io/*",
+    "wss://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "DuckHunt Auto-Shooter"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://duckdice.io/*"],
+      "js": ["content_script.js"],
+      "run_at": "document_start"
+    }
+  ]
 }

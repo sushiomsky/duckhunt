@@ -1,365 +1,232 @@
-// ===============================================
-// === DUCK DICE AUTO HUNTER CONTENT SCRIPT    ===
-// ===============================================
+// content_script.js
+// Inject code into page context to hook WebSocket (we need page context to intercept page's ws)
+(function () {
+  // This script will be injected at document_start by manifest so it runs before page WS created.
 
-/**
- * DuckHunter - Automated duck catching for duckdice.io
- * 
- * This script hooks into the WebSocket connection to detect duck spawn events
- * and automatically sends catch requests to the API.
- */
+  const injectedCode = `
 
-(function() {
-    'use strict';
+  (function() {
+    // === WebSocket interception wrapper ===
+    // Save original constructor
+    const OriginalWebSocket = window.WebSocket;
 
-    // ===============================================
-    // === CONFIGURATION                          ===
-    // ===============================================
-    
-    const CONFIG = {
-        // Event name from WebSocket analysis
-        DUCK_SPAWN_EVENT: 'App\\Game\\Events\\GameStarted',
-        // API endpoint for catching ducks
-        API_CATCH_URL: 'https://duckdice.io/api/duck-hunt/catch',
-        // WebSocket channel to monitor
-        CHANNEL: 'Production.Common',
-        // Event types to handle
-        EVENT_TYPES: {
-            MULTIPLE_DUCK_HUNT: 'multiple_duck_hunt',
-            SINGLE_DUCK_HUNT: 'duck_hunt'
-        },
-        // Logging prefix
-        LOG_PREFIX: '[DUCK HUNTER]',
-        // Enable debug logging
-        DEBUG: false,
-        // Enable auto-hunting
-        ENABLED: true
-    };
+    // Keep list of active sockets created by the page
+    window.__duckhunt_sockets = window.__duckhunt_sockets || [];
 
-    // ===============================================
-    // === STATISTICS TRACKING                    ===
-    // ===============================================
-    
-    const stats = {
-        ducksSpotted: 0,
-        ducksShot: 0,
-        successfulCatches: 0,
-        failedCatches: 0,
-        totalReactionTime: 0
-    };
+    // Storage for the learned shoot message template (string or JSON)
+    window.__duckhunt_learned_template = window.__duckhunt_learned_template || null;
 
-    // ===============================================
-    // === LOGGING UTILITIES                      ===
-    // ===============================================
-    
-    const Logger = {
-        info: (message, ...args) => {
-            console.log(`${CONFIG.LOG_PREFIX} ℹ️ ${message}`, ...args);
-        },
-        success: (message, ...args) => {
-            console.log(`${CONFIG.LOG_PREFIX} ✅ ${message}`, ...args);
-        },
-        warn: (message, ...args) => {
-            console.warn(`${CONFIG.LOG_PREFIX} ⚠️ ${message}`, ...args);
-        },
-        error: (message, ...args) => {
-            console.error(`${CONFIG.LOG_PREFIX} ❌ ${message}`, ...args);
-        },
-        debug: (message, ...args) => {
-            if (CONFIG.DEBUG) {
-                console.debug(`${CONFIG.LOG_PREFIX} 🔍 ${message}`, ...args);
+    // Helper: try parse JSON
+    function tryParseJSON(str) {
+      try {
+        return JSON.parse(str);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    // Helper: check if a server message is a duck event
+    function isDuckEvent(msgObj) {
+      // Defensive checks: game started with duck_hunt / multiple_duck_hunt or payload containing "duck_hunt"
+      if (!msgObj) return false;
+      // Known patterns discovered in mitm dump: {"type":"event","payload":["App\\\\Game\\\\Events\\\\GameStarted",... ,"type":"multiple_duck_hunt"]}
+      try {
+        if (msgObj.type && typeof msgObj.type === 'string') {
+          const t = msgObj.type.toLowerCase();
+          if (t.includes('game') && JSON.stringify(msgObj).toLowerCase().includes('duck_hunt')) return true;
+          if (t.includes('multiple_duck_hunt') || t.includes('duck_hunt')) return true;
+        }
+        // sometimes events are nested in payload arrays
+        if (Array.isArray(msgObj.payload)) {
+          const p = JSON.stringify(msgObj.payload).toLowerCase();
+          if (p.includes('duck_hunt')) return true;
+          if (p.includes('gamestarted') && p.includes('duck_hunt')) return true;
+        }
+        // fallback: string contains duck or duck_hunt
+        if (JSON.stringify(msgObj).toLowerCase().includes('duck')) return true;
+      } catch(e){}
+      return false;
+    }
+
+    // Helper: check if an outgoing message is a 'shoot' type
+    function isShootOutgoing(msg) {
+      if (!msg) return false;
+      // Try parse JSON
+      let obj = null;
+      if (typeof msg === 'string') obj = tryParseJSON(msg);
+      else obj = msg;
+
+      if (!obj) {
+        // fallback: textual check
+        const s = (''+msg).toLowerCase();
+        if (s.includes('shoot') || s.includes('duck') || s.includes('hit')) return true;
+        return false;
+      }
+
+      // If object has type or action naming that looks like shoot/hit
+      try {
+        if ((obj.type && /shoot|hit|duck|hunt|fire/i.test(obj.type)) ) return true;
+        if (obj.action && /shoot|hit|duck|hunt|fire/i.test(obj.action)) return true;
+        // payloads may contain the actual command
+        if (obj.payload && JSON.stringify(obj.payload).toLowerCase().includes('shoot')) return true;
+        if (JSON.stringify(obj).toLowerCase().includes('shoot')) return true;
+      } catch(e) {}
+      return false;
+    }
+
+    // Wrap constructor
+    function WrappedWebSocket(url, protocols) {
+      const ws = (protocols !== undefined) ? new OriginalWebSocket(url, protocols) : new OriginalWebSocket(url);
+
+      try {
+        // store metadata
+        ws.__duckhunt_url = url;
+        window.__duckhunt_sockets.push(ws);
+
+        // Wrap send to intercept outgoing messages
+        const origSend = ws.send.bind(ws);
+        ws.send = function(data) {
+          try {
+            // if we detect an outgoing shoot message, save template
+            if (!window.__duckhunt_learned_template && isShootOutgoing(data)) {
+              // Save raw string if possible
+              let raw = data;
+              if (typeof data !== 'string') {
+                try { raw = JSON.stringify(data); } catch(e) {}
+              }
+              window.__duckhunt_learned_template = raw;
+              // publish event to page that template learned
+              window.dispatchEvent(new CustomEvent('duckhunt-template-learned', {detail: {template: window.__duckhunt_learned_template}}));
+              console.log('[DuckHunt] Learned shoot template:', window.__duckhunt_learned_template);
             }
-        },
-        duck: (message, ...args) => {
-            console.log(`${CONFIG.LOG_PREFIX} 🦆 ${message}`, ...args);
-        }
-    };
+          } catch(e){}
 
-    // ===============================================
-    // === UTILITY FUNCTIONS                      ===
-    // ===============================================
-    
-    /**
-     * Validates a duck hash format
-     * @param {string} hash - The hash to validate
-     * @returns {boolean} Whether the hash is valid
-     */
-    function isValidHash(hash) {
-        return typeof hash === 'string' && hash.length > 0;
-    }
-
-    /**
-     * Safely parses JSON data
-     * @param {string} data - JSON string to parse
-     * @returns {Object|null} Parsed object or null on failure
-     */
-    function safeJsonParse(data) {
-        try {
-            return JSON.parse(data);
-        } catch (e) {
-            return null;
-        }
-    }
-
-    /**
-     * Gets current statistics with computed metrics
-     * @returns {Object} Statistics object with base stats and computed values
-     */
-    function getStats() {
-        const hasShotDucks = stats.ducksShot > 0;
-        
-        const averageReactionTimeMs = hasShotDucks 
-            ? (stats.totalReactionTime / stats.ducksShot).toFixed(2)
-            : '0';
-        
-        const successRatePercent = hasShotDucks 
-            ? ((stats.successfulCatches / stats.ducksShot) * 100).toFixed(1) + '%'
-            : '0%';
-        
-        return {
-            ducksSpotted: stats.ducksSpotted,
-            ducksShot: stats.ducksShot,
-            successfulCatches: stats.successfulCatches,
-            failedCatches: stats.failedCatches,
-            totalReactionTime: stats.totalReactionTime,
-            averageReactionTime: averageReactionTimeMs,
-            successRate: successRatePercent
-        };
-    }
-
-    // ===============================================
-    // === DUCK SHOOTING FUNCTION                 ===
-    // ===============================================
-    
-    /**
-     * Sends a POST request to catch a duck
-     * @param {string} duckHash - The unique hash of the duck to catch
-     * @returns {Promise<boolean>} Whether the catch was successful
-     */
-    async function shootDuck(duckHash) {
-        if (!isValidHash(duckHash)) {
-            Logger.error('Invalid duck hash provided');
-            return false;
-        }
-
-        const startTime = performance.now();
-        stats.ducksShot++;
-
-        try {
-            const response = await fetch(CONFIG.API_CATCH_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                    // Authentication headers (Cookie, x-fingerprint) are automatically
-                    // sent by the browser since script runs in page context
-                },
-                body: JSON.stringify({ hash: duckHash }),
-                credentials: 'include'
-            });
-
-            const endTime = performance.now();
-            const reactionTime = (endTime - startTime).toFixed(2);
-            stats.totalReactionTime += parseFloat(reactionTime);
-
-            if (response.ok && response.status === 200) {
-                const text = await response.text();
-                
-                if (text.trim() === '1') {
-                    stats.successfulCatches++;
-                    Logger.success(`SUCCESS! Hash: ${duckHash} | Time: ${reactionTime} ms`);
-                    return true;
-                } else {
-                    stats.failedCatches++;
-                    Logger.warn(`Sent, but unexpected response: ${text} | Time: ${reactionTime} ms`);
-                    return false;
-                }
-            } else {
-                stats.failedCatches++;
-                Logger.error(`Failed to catch (Status: ${response.status}) | Time: ${reactionTime} ms`);
-                return false;
-            }
-        } catch (error) {
-            stats.failedCatches++;
-            Logger.error(`POST request failed for ${duckHash}:`, error.message);
-            return false;
-        }
-    }
-
-    // ===============================================
-    // === EVENT HANDLING                         ===
-    // ===============================================
-    
-    /**
-     * Processes a single duck from the event payload
-     * @param {Object} duck - Duck object with hash property
-     */
-    function processSingleDuck(duck) {
-        if (duck && duck.type === CONFIG.EVENT_TYPES.SINGLE_DUCK_HUNT && duck.hash) {
-            stats.ducksSpotted++;
-            Logger.duck(`Duck spotted! Hash: ${duck.hash}. Initiating catch...`);
-            
-            // Only shoot if enabled
-            if (CONFIG.ENABLED) {
-                shootDuck(duck.hash);
-            } else {
-                Logger.info('Auto-hunt disabled. Skipping catch.');
-            }
-        }
-    }
-
-    /**
-     * Handles duck spawn events from WebSocket messages
-     * @param {Object} messageData - The parsed WebSocket message
-     */
-    function handleDuckSpawn(messageData) {
-        // Validate message structure
-        if (!messageData || !messageData.payload || !Array.isArray(messageData.payload)) {
-            Logger.debug('Invalid message structure');
-            return;
-        }
-
-        // The actual payload is the third element in the 'payload' array
-        const eventPayload = messageData.payload[2];
-
-        if (!eventPayload) {
-            Logger.debug('No event payload found');
-            return;
-        }
-
-        // Handle multiple duck hunt event
-        if (eventPayload.type === CONFIG.EVENT_TYPES.MULTIPLE_DUCK_HUNT && Array.isArray(eventPayload.children)) {
-            const duckCount = eventPayload.children.length;
-            
-            if (duckCount > 0) {
-                Logger.info(`Multiple ducks detected: ${duckCount}. Starting auto-catch...`);
-                
-                // Process all ducks in parallel
-                eventPayload.children.forEach(processSingleDuck);
-                
-                Logger.debug('Current stats:', getStats());
-            }
-        }
-        // Handle single duck hunt event
-        else if (eventPayload.type === CONFIG.EVENT_TYPES.SINGLE_DUCK_HUNT) {
-            processSingleDuck(eventPayload);
-        }
-    }
-
-    /**
-     * Processes incoming WebSocket messages
-     * @param {MessageEvent} event - The WebSocket message event
-     */
-    function processWebSocketMessage(event) {
-        const message = safeJsonParse(event.data);
-        
-        if (!message) {
-            // Not a JSON message (e.g., ping)
-            return;
-        }
-
-        // Check if it's a Pusher event on the correct channel
-        if (message.type === 'event' && 
-            message.channel === CONFIG.CHANNEL && 
-            message.payload && 
-            Array.isArray(message.payload) && 
-            message.payload[0] === CONFIG.DUCK_SPAWN_EVENT) {
-            
-            Logger.debug('Duck spawn event detected');
-            handleDuckSpawn(message);
-        }
-    }
-
-    // ===============================================
-    // === WEBSOCKET HOOKING                      ===
-    // ===============================================
-    
-    /**
-     * Hooks into the WebSocket connection to intercept messages
-     */
-    function hookWebSocket() {
-        // Store the original WebSocket class
-        const OriginalWebSocket = window.WebSocket;
-
-        // Override the global WebSocket class
-        window.WebSocket = function(url, protocols) {
-            Logger.debug(`WebSocket connection initiated: ${url}`);
-            
-            // Create the actual WebSocket instance
-            const ws = protocols !== undefined 
-                ? new OriginalWebSocket(url, protocols)
-                : new OriginalWebSocket(url);
-
-            // Listen for incoming messages
-            ws.addEventListener('message', processWebSocketMessage);
-
-            // Log connection state changes in debug mode
-            ws.addEventListener('open', () => {
-                Logger.debug('WebSocket connection opened');
-            });
-
-            ws.addEventListener('close', (event) => {
-                Logger.debug(`WebSocket connection closed: ${event.code} - ${event.reason}`);
-            });
-
-            ws.addEventListener('error', (error) => {
-                Logger.debug('WebSocket error:', error);
-            });
-
-            return ws;
+          // always forward
+          return origSend(data);
         };
 
-        // Preserve WebSocket constants and prototype
-        window.WebSocket.CONNECTING = OriginalWebSocket.CONNECTING;
-        window.WebSocket.OPEN = OriginalWebSocket.OPEN;
-        window.WebSocket.CLOSING = OriginalWebSocket.CLOSING;
-        window.WebSocket.CLOSED = OriginalWebSocket.CLOSED;
-        window.WebSocket.prototype = OriginalWebSocket.prototype;
-    }
-
-    // ===============================================
-    // === CHROME MESSAGE HANDLING                ===
-    // ===============================================
-    
-    /**
-     * Handle messages from the popup
-     */
-    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
-        chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-            if (request.type === 'GET_STATS') {
-                sendResponse({ stats: getStats() });
-            } else if (request.type === 'UPDATE_SETTINGS') {
-                if (request.settings) {
-                    // Use explicit boolean conversion with default values
-                    CONFIG.ENABLED = Boolean(request.settings.enabled ?? true);
-                    CONFIG.DEBUG = Boolean(request.settings.debug ?? false);
-                    Logger.info(`Settings updated - Enabled: ${CONFIG.ENABLED}, Debug: ${CONFIG.DEBUG}`);
-                }
-                sendResponse({ success: true });
-            }
-            return true; // Keep message channel open for async response
+        // Wrap onmessage to detect duck events
+        ws.addEventListener('message', function(ev) {
+          let payload = ev.data;
+          // Try parse JSON and inspect
+          let parsed = null;
+          try { parsed = JSON.parse(payload); } catch(e){ parsed = null; }
+          if (isDuckEvent(parsed || payload)) {
+            // we detected a duck event - fire page event
+            window.dispatchEvent(new CustomEvent('duckhunt-duck-detected', { detail: { socketUrl: url, raw: payload, parsed: parsed } }));
+            // If auto-shoot enabled, request background to perform shoot via DOM event (background cannot access page ws)
+            window.dispatchEvent(new CustomEvent('duckhunt-request-autoshoot', { detail: { socketUrl: url, raw: payload, parsed: parsed } }));
+          }
         });
+      } catch(e) {
+        console.error('[DuckHunt] WS wrap error', e);
+      }
+      return ws;
     }
 
-    // ===============================================
-    // === GLOBAL API FOR DEBUGGING               ===
-    // ===============================================
-    
-    // Expose API for debugging in console
-    window.DuckHunter = {
-        getStats,
-        getConfig: () => ({ ...CONFIG }),
-        enableDebug: () => { CONFIG.DEBUG = true; Logger.info('Debug mode enabled'); },
-        disableDebug: () => { CONFIG.DEBUG = false; Logger.info('Debug mode disabled'); },
-        enable: () => { CONFIG.ENABLED = true; Logger.info('Duck Hunter enabled'); },
-        disable: () => { CONFIG.ENABLED = false; Logger.info('Duck Hunter disabled'); }
+    // Copy static props
+    WrappedWebSocket.prototype = OriginalWebSocket.prototype;
+    WrappedWebSocket.CONNECTING = OriginalWebSocket.CONNECTING;
+    WrappedWebSocket.OPEN = OriginalWebSocket.OPEN;
+    WrappedWebSocket.CLOSING = OriginalWebSocket.CLOSING;
+    WrappedWebSocket.CLOSED = OriginalWebSocket.CLOSED;
+
+    // Replace global WebSocket
+    window.WebSocket = WrappedWebSocket;
+
+    // Provide API on window for manual control by extension popup
+    window.__duckhunt_api = {
+      getLearnedTemplate: function(){ return window.__duckhunt_learned_template; },
+      setLearnedTemplate: function(t){ window.__duckhunt_learned_template = t; },
+      listSockets: function(){ return window.__duckhunt_sockets.map(s => ({url: s.__duckhunt_url, readyState: s.readyState}) ); },
+      attemptShootNow: function(extra) {
+        // attempt to replay learned template on first available socket
+        try {
+          const template = window.__duckhunt_learned_template;
+          const sockets = window.__duckhunt_sockets.filter(s => s.readyState === 1);
+          if (!sockets.length) {
+            console.warn('[DuckHunt] No open sockets to shoot.');
+            return {ok:false,reason:'no-socket'};
+          }
+          if (!template) {
+            console.warn('[DuckHunt] No learned template available.');
+            return {ok:false,reason:'no-template'};
+          }
+          // For safety, clone the template. If it's JSON string, try parse then stringify to make sure it's string
+          let payload = template;
+          if (typeof payload !== 'string') payload = JSON.stringify(payload);
+          // Optionally merge extras (if provided: replace placeholders like {{hash}})
+          if (extra && typeof extra === 'object') {
+            try {
+              let obj = JSON.parse(payload);
+              // shallow merge
+              Object.assign(obj, extra);
+              payload = JSON.stringify(obj);
+            } catch(e) {
+              // cannot merge into non-json
+            }
+          }
+          sockets[0].send(payload);
+          console.log('[DuckHunt] Sent learned template on socket', sockets[0].__duckhunt_url);
+          return {ok:true};
+        } catch(e) {
+          console.error('[DuckHunt] attemptShootNow error', e);
+          return {ok:false,reason:e.message};
+        }
+      }
     };
 
-    // ===============================================
-    // === INITIALIZATION                         ===
-    // ===============================================
-    
-    Logger.info('Script loaded. Hooking WebSocket connection...');
-    hookWebSocket();
-    Logger.success('Duck Hunter initialized. Happy hunting! 🎯');
+    // log readiness
+    console.log('[DuckHunt] WebSocket hook injected.');
 
+  })(); // end injected IIFE
+
+  `;
+
+  // Inject into page
+  const script = document.createElement('script');
+  script.textContent = injectedCode;
+  (document.head || document.documentElement).appendChild(script);
+  script.remove();
+
+  // === Bridge between page and extension (content script context) ===
+
+  // Forward custom events from page to extension (via window.postMessage)
+  window.addEventListener('duckhunt-duck-detected', function(ev) {
+    window.postMessage({ duckhunt_event: 'duck_detected', detail: ev.detail }, '*');
+  });
+
+  window.addEventListener('duckhunt-template-learned', function(ev) {
+    window.postMessage({ duckhunt_event: 'template_learned', detail: ev.detail }, '*');
+  });
+
+  window.addEventListener('duckhunt-request-autoshoot', function(ev) {
+    window.postMessage({ duckhunt_event: 'request_autoshoot', detail: ev.detail }, '*');
+  });
+
+  // Listen to messages from extension (popup/background) to call page API
+  window.addEventListener('message', function(ev) {
+    if (!ev.data || !ev.data.duckhunt_cmd) return;
+    const cmd = ev.data.duckhunt_cmd;
+    try {
+      if (cmd === 'get_template') {
+        const resp = window.__duckhunt_api && window.__duckhunt_api.getLearnedTemplate ? window.__duckhunt_api.getLearnedTemplate() : null;
+        window.postMessage({ duckhunt_resp: 'template', value: resp }, '*');
+      } else if (cmd === 'shoot_now') {
+        const extra = ev.data.extra || null;
+        const result = window.__duckhunt_api && window.__duckhunt_api.attemptShootNow ? window.__duckhunt_api.attemptShootNow(extra) : {ok:false,reason:'no-api'};
+        window.postMessage({ duckhunt_resp: 'shoot_result', value: result }, '*');
+      } else if (cmd === 'set_template') {
+        window.__duckhunt_api && window.__duckhunt_api.setLearnedTemplate && window.__duckhunt_api.setLearnedTemplate(ev.data.template);
+        window.postMessage({ duckhunt_resp: 'set_template_ok' }, '*');
+      } else if (cmd === 'list_sockets') {
+        const list = window.__duckhunt_api && window.__duckhunt_api.listSockets ? window.__duckhunt_api.listSockets() : [];
+        window.postMessage({ duckhunt_resp: 'list_sockets', value: list }, '*');
+      }
+    } catch (e) {
+      window.postMessage({ duckhunt_resp: 'error', value: e.message }, '*');
+    }
+  });
+
+  // Also forward page->extension events as window.postMessage already used above
 })();
