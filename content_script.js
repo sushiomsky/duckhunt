@@ -102,20 +102,28 @@
     }
 
     /**
-     * Gets current statistics
-     * @returns {Object} Statistics object
+     * Gets current statistics with computed metrics
+     * @returns {Object} Statistics object with base stats and computed values
      */
     function getStats() {
-        const avgReactionTime = stats.ducksShot > 0 
+        const hasShotDucks = stats.ducksShot > 0;
+        
+        const averageReactionTimeMs = hasShotDucks 
             ? (stats.totalReactionTime / stats.ducksShot).toFixed(2)
-            : 0;
+            : '0';
+        
+        const successRatePercent = hasShotDucks 
+            ? ((stats.successfulCatches / stats.ducksShot) * 100).toFixed(1) + '%'
+            : '0%';
         
         return {
-            ...stats,
-            averageReactionTime: avgReactionTime,
-            successRate: stats.ducksShot > 0 
-                ? ((stats.successfulCatches / stats.ducksShot) * 100).toFixed(1) + '%'
-                : '0%'
+            ducksSpotted: stats.ducksSpotted,
+            ducksShot: stats.ducksShot,
+            successfulCatches: stats.successfulCatches,
+            failedCatches: stats.failedCatches,
+            totalReactionTime: stats.totalReactionTime,
+            averageReactionTime: averageReactionTimeMs,
+            successRate: successRatePercent
         };
     }
 
@@ -321,8 +329,9 @@
                 sendResponse({ stats: getStats() });
             } else if (request.type === 'UPDATE_SETTINGS') {
                 if (request.settings) {
-                    CONFIG.ENABLED = request.settings.enabled !== false;
-                    CONFIG.DEBUG = request.settings.debug === true;
+                    // Use explicit boolean conversion with default values
+                    CONFIG.ENABLED = Boolean(request.settings.enabled ?? true);
+                    CONFIG.DEBUG = Boolean(request.settings.debug ?? false);
                     Logger.info(`Settings updated - Enabled: ${CONFIG.ENABLED}, Debug: ${CONFIG.DEBUG}`);
                 }
                 sendResponse({ success: true });

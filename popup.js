@@ -19,6 +19,9 @@ const defaultSettings = {
     debug: false
 };
 
+// Interval reference for cleanup
+let statsInterval = null;
+
 /**
  * Load settings from Chrome storage
  */
@@ -52,6 +55,11 @@ async function saveSettings() {
             chrome.tabs.sendMessage(tab.id, { 
                 type: 'UPDATE_SETTINGS', 
                 settings: settings 
+            }, (response) => {
+                // Check for runtime errors (e.g., content script not ready)
+                if (chrome.runtime.lastError) {
+                    console.warn('Could not update content script:', chrome.runtime.lastError.message);
+                }
             });
         }
     } catch (error) {
@@ -67,6 +75,11 @@ async function requestStats() {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (tab && tab.url && tab.url.includes('duckdice.io')) {
             chrome.tabs.sendMessage(tab.id, { type: 'GET_STATS' }, (response) => {
+                // Check for runtime errors (e.g., content script not ready)
+                if (chrome.runtime.lastError) {
+                    console.warn('Could not get stats:', chrome.runtime.lastError.message);
+                    return;
+                }
                 if (response && response.stats) {
                     updateStatsDisplay(response.stats);
                 }
@@ -98,5 +111,13 @@ document.addEventListener('DOMContentLoaded', () => {
     requestStats();
     
     // Refresh stats every 2 seconds while popup is open
-    setInterval(requestStats, 2000);
+    statsInterval = setInterval(requestStats, 2000);
+});
+
+// Clean up interval when popup closes
+window.addEventListener('unload', () => {
+    if (statsInterval) {
+        clearInterval(statsInterval);
+        statsInterval = null;
+    }
 });
