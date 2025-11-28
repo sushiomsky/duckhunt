@@ -1,24 +1,20 @@
 {
-  "manifest_version": 3,
-  "name": "DuckDice Duck Hunt Auto-Shooter",
-  "version": "1.0.0",
-  "description": "A chrome plugin that kills ducks in duckdice duckhunt",
-  "permissions": [
-    "activeTab"
-  ],
-  "host_permissions": [
-    "https://duckdice.io/*"
-  ],
-  "content_scripts": [
-    {
-      "matches": ["https://duckdice.io/*"],
-      "js": ["content.js"],
-      "run_at": "document_idle"
-    }
-  ],
-  "icons": {
-    "16": "icon16.png",
-    "48": "icon48.png",
-    "128": "icon128.png"
-  }
+    "manifest_version": 3,
+    "name": "DuckDice Auto Hunter",
+    "version": "1.0",
+    "description": "Automatisiert das Abschießen von Enten auf duckdice.io.",
+    "icons": {
+        "16": "icon16.png",
+        "48": "icon48.png",
+        "128": "icon128.png"
+    },
+    "content_scripts": [
+        {
+            "matches": ["*://duckdice.io/*"],
+            "js": ["content_script.js"],
+            "run_at": "document_start" 
+        }
+    ],
+    "permissions": ["activeTab"],
+    "host_permissions": ["*://duckdice.io/"]
 }
